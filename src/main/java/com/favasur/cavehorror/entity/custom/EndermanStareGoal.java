@@ -7,29 +7,29 @@ import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 
 public class EndermanStareGoal extends Goal {
-    private final EndermanEntity cavedweller;
+    private final EndermanEntity enderman;
     private final float ticksTillLeave;
     private float currentTicksTillLeave;
     private boolean shouldLeave;
 
     public EndermanStareGoal(EndermanEntity pEnderman, float pTicksTillLeave) {
-        this.cavedweller = pEnderman;
+        this.enderman = pEnderman;
         this.ticksTillLeave = pTicksTillLeave;
         this.currentTicksTillLeave = pTicksTillLeave;
     }
 
     @Override
     public boolean canUse() {
-        if (this.cavedweller.isInvisible()) {
+        if (this.enderman.isInvisible()) {
             return false;
         } else {
-            return this.cavedweller.getTarget() != null && this.cavedweller.rRollResult == 1 && !this.cavedweller.forcedStalk;
+            return this.enderman.getTarget() != null && this.enderman.rRollResult == 1 && !this.enderman.forcedStalk;
         }
     }
 
     @Override
     public boolean canContinueToUse() {
-        return this.cavedweller.getTarget() != null && this.cavedweller.rRollResult == 1 && !this.cavedweller.forcedStalk;
+        return this.enderman.getTarget() != null && this.enderman.rRollResult == 1 && !this.enderman.forcedStalk;
     }
 
     @Override
@@ -49,7 +49,7 @@ public class EndermanStareGoal extends Goal {
     }
 
     public boolean isPlayerLookingTowards() {
-        LivingEntity pendingTarget = this.cavedweller.getTarget();
+        LivingEntity pendingTarget = this.enderman.getTarget();
         Minecraft minecraft = Minecraft.getInstance();
         float fov = (float) (Integer) minecraft.options.fov().get();
         float yFovMod = 0.65F;
@@ -57,7 +57,7 @@ public class EndermanStareGoal extends Goal {
         fov *= fovMod;
 
         Vec3 a = pendingTarget.position();
-        Vec3 b = this.cavedweller.position();
+        Vec3 b = this.enderman.position();
         Vec2 dist = new Vec2((float) (b.x - a.x), (float) (b.z - a.z));
         dist = dist.normalized();
         double newAngle = Math.toDegrees(Math.atan2(dist.x, dist.y));
@@ -89,8 +89,8 @@ public class EndermanStareGoal extends Goal {
     }
 
     public boolean inPlayerLineOfSight() {
-        LivingEntity pendingTarget = this.cavedweller.getTarget();
-        return pendingTarget != null && pendingTarget.hasLineOfSight(this.cavedweller);
+        LivingEntity pendingTarget = this.enderman.getTarget();
+        return pendingTarget != null && pendingTarget.hasLineOfSight(this.enderman);
     }
 
     public double loopAngle(double angle) {
@@ -105,9 +105,9 @@ public class EndermanStareGoal extends Goal {
     public void tick() {
         this.tickStareClock();
         if (this.shouldLeave && (!this.isPlayerLookingTowards() || !this.inPlayerLineOfSight())) {
-            this.cavedweller.playDisappearSound();
-            this.cavedweller.discard();
+            this.enderman.playDisappearSound();
+            this.enderman.discard();
         }
-        this.cavedweller.getLookControl().setLookAt(this.cavedweller.getTarget(), 180.0F, 1.0F);
+        this.enderman.getLookControl().setLookAt(this.enderman.getTarget(), 180.0F, 1.0F);
     }
 }

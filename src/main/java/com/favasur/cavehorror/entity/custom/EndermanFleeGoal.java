@@ -13,7 +13,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Random;
 
 public class EndermanFleeGoal extends Goal {
-    private final EndermanEntity cavedweller;
+    private final EndermanEntity enderman;
     private final float ticksTillLeave;
     private final float ticksTillFlee;
     private float currentTicksTillLeave;
@@ -26,7 +26,7 @@ public class EndermanFleeGoal extends Goal {
     private final double speedModifier;
 
     public EndermanFleeGoal(EndermanEntity pEnderman, float pTicksTillLeave, double pSpeedModifier) {
-        this.cavedweller = pEnderman;
+        this.enderman = pEnderman;
         this.ticksTillLeave = pTicksTillLeave;
         this.currentTicksTillLeave = pTicksTillLeave;
         this.ticksTillFlee = 10.0F;
@@ -36,22 +36,22 @@ public class EndermanFleeGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        if (this.cavedweller.isInvisible()) {
+        if (this.enderman.isInvisible()) {
             return false;
         } else {
-            return this.cavedweller.rRollResult == 2 && !this.cavedweller.forcedStalk && this.cavedweller.getTarget() != null;
+            return this.enderman.rRollResult == 2 && !this.enderman.forcedStalk && this.enderman.getTarget() != null;
         }
     }
 
     @Override
     public boolean canContinueToUse() {
-        return this.cavedweller.rRollResult == 2 && !this.cavedweller.forcedStalk && this.cavedweller.getTarget() != null;
+        return this.enderman.rRollResult == 2 && !this.enderman.forcedStalk && this.enderman.getTarget() != null;
     }
 
     @Override
     public void start() {
         this.getSpotToWalk();
-        this.cavedweller.spottedByPlayer = false;
+        this.enderman.spottedByPlayer = false;
         this.shouldLeave = false;
     }
 
@@ -60,7 +60,7 @@ public class EndermanFleeGoal extends Goal {
     }
 
     public boolean isPlayerLookingTowards() {
-        LivingEntity pendingTarget = this.cavedweller.getTarget();
+        LivingEntity pendingTarget = this.enderman.getTarget();
         Minecraft minecraft = Minecraft.getInstance();
         float fov = (float) (Integer) minecraft.options.fov().get();
         float yFovMod = 0.65F;
@@ -68,7 +68,7 @@ public class EndermanFleeGoal extends Goal {
         fov *= fovMod;
 
         Vec3 a = pendingTarget.position();
-        Vec3 b = this.cavedweller.position();
+        Vec3 b = this.enderman.position();
         Vec2 dist = new Vec2((float) (b.x - a.x), (float) (b.z - a.z));
         dist = dist.normalized();
         double newAngle = Math.toDegrees(Math.atan2(dist.x, dist.y));
@@ -100,7 +100,7 @@ public class EndermanFleeGoal extends Goal {
     }
 
     public boolean inPlayerLineOfSight() {
-        return this.cavedweller.getTarget() != null && this.cavedweller.getTarget().hasLineOfSight(this.cavedweller);
+        return this.enderman.getTarget() != null && this.enderman.getTarget().hasLineOfSight(this.enderman);
     }
 
     public double loopAngle(double angle) {
@@ -118,27 +118,27 @@ public class EndermanFleeGoal extends Goal {
         double randZ = rand.nextDouble() - 0.5;
 
         if (randX > 0.0) {
-            this.fleeX = (this.cavedweller.getX() + 1.0) * 64.0;
+            this.fleeX = (this.enderman.getX() + 1.0) * 64.0;
         } else {
-            this.fleeX = (this.cavedweller.getX() - 1.0) * 64.0;
+            this.fleeX = (this.enderman.getX() - 1.0) * 64.0;
         }
 
-        this.fleeY = this.cavedweller.getY() + randY;
+        this.fleeY = this.enderman.getY() + randY;
 
         if (randZ > 0.0) {
-            this.fleeZ = (this.cavedweller.getZ() + 1.0) * 64.0;
+            this.fleeZ = (this.enderman.getZ() + 1.0) * 64.0;
         } else {
-            this.fleeZ = (this.cavedweller.getZ() - 1.0) * 64.0;
+            this.fleeZ = (this.enderman.getZ() - 1.0) * 64.0;
         }
 
         BlockPos.MutableBlockPos blockPos = new BlockPos.MutableBlockPos(this.fleeX, this.fleeY, this.fleeZ);
 
-        while (blockPos.getY() > this.cavedweller.level().getMinBuildHeight()
-                && !this.cavedweller.level().getBlockState(blockPos).isSolid()) {
+        while (blockPos.getY() > this.enderman.level().getMinBuildHeight()
+                && !this.enderman.level().getBlockState(blockPos).isSolid()) {
             blockPos.move(Direction.DOWN);
         }
 
-        BlockState blockstate = this.cavedweller.level().getBlockState(blockPos);
+        BlockState blockstate = this.enderman.level().getBlockState(blockPos);
         boolean flag = blockstate.isSolid();
         boolean flag1 = blockstate.getFluidState().is(FluidTags.WATER);
         return flag && !flag1;
@@ -156,11 +156,11 @@ public class EndermanFleeGoal extends Goal {
     }
 
     public void fleeTick() {
-        this.cavedweller.playFleeSound();
+        this.enderman.playFleeSound();
         this.ticksUntilNextPathRecalculation = Math.max(this.ticksUntilNextPathRecalculation - 1, 0);
         if (this.ticksUntilNextPathRecalculation <= 0) {
             this.ticksUntilNextPathRecalculation = 2;
-            if (!this.cavedweller.getNavigation().moveTo(this.fleeX, this.fleeY, this.fleeZ, this.speedModifier)) {
+            if (!this.enderman.getNavigation().moveTo(this.fleeX, this.fleeY, this.fleeZ, this.speedModifier)) {
                 this.ticksUntilNextPathRecalculation += 2;
             }
             this.ticksUntilNextPathRecalculation = this.reducedTickDelay(this.ticksUntilNextPathRecalculation);
@@ -170,17 +170,17 @@ public class EndermanFleeGoal extends Goal {
     @Override
     public void tick() {
         if (this.shouldLeave && (!this.isPlayerLookingTowards() || !this.inPlayerLineOfSight())) {
-            this.cavedweller.discard();
+            this.enderman.discard();
         }
 
         this.tickFleeClock();
         this.tickStareClock();
         if (this.currentTicksTillFlee <= 0.0F) {
             this.fleeTick();
-            this.cavedweller.isFleeing = true;
-            this.cavedweller.getEntityData().set(EndermanEntity.FLEEING_ACCESSOR, true);
+            this.enderman.isFleeing = true;
+            this.enderman.getEntityData().set(EndermanEntity.FLEEING_ACCESSOR, true);
         } else {
-            this.cavedweller.getLookControl().setLookAt(this.cavedweller.getTarget(), 180.0F, 1.0F);
+            this.enderman.getLookControl().setLookAt(this.enderman.getTarget(), 180.0F, 1.0F);
         }
     }
 }

@@ -9,13 +9,13 @@ import net.minecraft.world.phys.Vec3;
 import javax.annotation.Nullable;
 
 public class EndermanTargetSeesMeGoal extends NearestAttackableTargetGoal<Player> {
-    private final EndermanEntity cavedweller;
+    private final EndermanEntity enderman;
     @Nullable
     private Player pendingTarget;
 
     public EndermanTargetSeesMeGoal(EndermanEntity pEnderman) {
         super(pEnderman, Player.class, false);
-        this.cavedweller = pEnderman;
+        this.enderman = pEnderman;
     }
 
     public void setPendingTarget(@Nullable Player pendingTarget) {
@@ -23,7 +23,7 @@ public class EndermanTargetSeesMeGoal extends NearestAttackableTargetGoal<Player
     }
 
     public boolean inPlayerLineOfSight() {
-        return this.pendingTarget != null && this.pendingTarget.hasLineOfSight(this.cavedweller);
+        return this.pendingTarget != null && this.pendingTarget.hasLineOfSight(this.enderman);
     }
 
     public boolean isPlayerLookingTowards() {
@@ -34,7 +34,7 @@ public class EndermanTargetSeesMeGoal extends NearestAttackableTargetGoal<Player
         fov *= fovMod;
 
         Vec3 a = this.pendingTarget.position();
-        Vec3 b = this.cavedweller.position();
+        Vec3 b = this.enderman.position();
         Vec2 dist = new Vec2((float) (b.x - a.x), (float) (b.z - a.z));
         dist = dist.normalized();
         double newAngle = Math.toDegrees(Math.atan2(dist.x, dist.y));
@@ -75,10 +75,10 @@ public class EndermanTargetSeesMeGoal extends NearestAttackableTargetGoal<Player
 
     @Override
     public boolean canUse() {
-        if (this.cavedweller.isInvisible()) {
+        if (this.enderman.isInvisible()) {
             return false;
         } else {
-            this.setPendingTarget(this.cavedweller.level().getNearestPlayer(this.cavedweller, 200.0));
+            this.setPendingTarget(this.enderman.level().getNearestPlayer(this.enderman, 200.0));
             if (this.pendingTarget == null) {
                 return false;
             } else {
@@ -90,10 +90,10 @@ public class EndermanTargetSeesMeGoal extends NearestAttackableTargetGoal<Player
     @Override
     public void start() {
         this.target = this.pendingTarget;
-        this.cavedweller.setTarget(this.pendingTarget);
-        this.cavedweller.spottedByPlayer = true;
-        this.cavedweller.getEntityData().set(EndermanEntity.SPOTTED_ACCESSOR, true);
-        this.cavedweller.rRoll();
+        this.enderman.setTarget(this.pendingTarget);
+        this.enderman.spottedByPlayer = true;
+        this.enderman.getEntityData().set(EndermanEntity.SPOTTED_ACCESSOR, true);
+        this.enderman.rRoll();
         super.start();
     }
 

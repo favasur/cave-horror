@@ -7,27 +7,32 @@ import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 
 public class EndermanBreakInvisGoal extends Goal {
-    private final EndermanEntity cavedweller;
+    private final EndermanEntity enderman;
     private Player pendingTarget;
 
     public EndermanBreakInvisGoal(EndermanEntity pCavedweller) {
-        this.cavedweller = pCavedweller;
+        this.enderman = pCavedweller;
     }
 
     @Override
     public boolean canUse() {
-        this.pendingTarget = this.cavedweller.level().getNearestPlayer(this.cavedweller, 200.0);
+        this.pendingTarget = this.enderman.level().getNearestPlayer(this.enderman, 200.0);
         return !this.inPlayerLineOfSight() || !this.isPlayerLookingTowards();
     }
 
     @Override
     public void start() {
         super.start();
-        this.cavedweller.setInvisible(false);
+        this.enderman.setInvisible(false);
+    }
+
+    @Override
+    public boolean canContinueToUse() {
+        return false;
     }
 
     public boolean inPlayerLineOfSight() {
-        return this.pendingTarget != null && this.pendingTarget.hasLineOfSight(this.cavedweller);
+        return this.pendingTarget != null && this.pendingTarget.hasLineOfSight(this.enderman);
     }
 
     public boolean isPlayerLookingTowards() {
@@ -38,7 +43,7 @@ public class EndermanBreakInvisGoal extends Goal {
         fov *= fovMod;
 
         Vec3 a = this.pendingTarget.position();
-        Vec3 b = this.cavedweller.position();
+        Vec3 b = this.enderman.position();
         Vec2 dist = new Vec2((float) (b.x - a.x), (float) (b.z - a.z));
         dist = dist.normalized();
         double newAngle = Math.toDegrees(Math.atan2(dist.x, dist.y));

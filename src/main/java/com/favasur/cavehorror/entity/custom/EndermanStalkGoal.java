@@ -8,7 +8,7 @@ import net.minecraft.world.level.pathfinder.Path;
 import java.util.Random;
 
 public class EndermanStalkGoal extends Goal {
-    private final EndermanEntity cavedweller;
+    private final EndermanEntity enderman;
     private final double speedModifier;
     private int minTicksTillFlip = 400;
     private int maxTicksTillFlip = 600;
@@ -29,58 +29,58 @@ public class EndermanStalkGoal extends Goal {
 
     public EndermanStalkGoal(EndermanEntity pEnderman, double pSpeedModifier, float pDistanceForAggro) {
         this.distanceForAggro = pDistanceForAggro;
-        this.cavedweller = pEnderman;
+        this.enderman = pEnderman;
         this.speedModifier = pSpeedModifier;
     }
 
     @Override
     public boolean canUse() {
-        if (this.cavedweller.isInvisible()) {
+        if (this.enderman.isInvisible()) {
             return false;
         } else {
-            if (this.cavedweller.getTarget() == null) {
+            if (this.enderman.getTarget() == null) {
                 this.stalkingTarget = this.getTargetToStalk();
             } else {
-                this.stalkingTarget = this.cavedweller.getTarget();
+                this.stalkingTarget = this.enderman.getTarget();
             }
-            return this.stalkingTarget != null && (this.cavedweller.rRollResult == 3 || this.cavedweller.forcedStalk);
+            return this.stalkingTarget != null && (this.enderman.rRollResult == 3 || this.enderman.forcedStalk);
         }
     }
 
     @Override
     public boolean canContinueToUse() {
-        if (this.cavedweller.isInvisible()) {
+        if (this.enderman.isInvisible()) {
             return false;
         } else {
-            return this.stalkingTarget != null && (this.cavedweller.rRollResult == 3 || this.cavedweller.forcedStalk);
+            return this.stalkingTarget != null && (this.enderman.rRollResult == 3 || this.enderman.forcedStalk);
         }
     }
 
     public void switchToAggroIfPlayerInRange() {
-        if (this.stalkingTarget.distanceTo(this.cavedweller) < this.distanceForAggro
-                && this.cavedweller.inPlayerLineOfSight()
-                && this.cavedweller.isPlayerLookingTowards()) {
-            this.cavedweller.rRollResult = 0;
-            this.cavedweller.forcedStalk = false;
+        if (this.stalkingTarget.distanceTo(this.enderman) < this.distanceForAggro
+                && this.enderman.inPlayerLineOfSight()
+                && this.enderman.isPlayerLookingTowards()) {
+            this.enderman.rRollResult = 0;
+            this.enderman.forcedStalk = false;
         }
     }
 
     @Override
     public void start() {
-        this.cavedweller.getEntityData().set(EndermanEntity.STALKING_ACCESSOR, true);
+        this.enderman.getEntityData().set(EndermanEntity.STALKING_ACCESSOR, true);
         this.ticksTillFlip = this.minTicksTillFlip + this.rand.nextInt(this.maxTicksTillFlip - this.minTicksTillFlip);
         super.start();
     }
 
     @Override
     public void stop() {
-        this.cavedweller.getEntityData().set(EndermanEntity.STALKING_ACCESSOR, false);
-        this.cavedweller.getNavigation().stop();
+        this.enderman.getEntityData().set(EndermanEntity.STALKING_ACCESSOR, false);
+        this.enderman.getNavigation().stop();
         super.stop();
     }
 
     private LivingEntity getTargetToStalk() {
-        return this.cavedweller.level().getNearestPlayer(this.cavedweller, 200.0);
+        return this.enderman.level().getNearestPlayer(this.enderman, 200.0);
     }
 
     @Override
@@ -88,22 +88,22 @@ public class EndermanStalkGoal extends Goal {
         this.switchToAggroIfPlayerInRange();
         LivingEntity livingentity = this.stalkingTarget;
         if (livingentity != null) {
-            this.cavedweller.getLookControl().setLookAt(livingentity, 30.0F, 30.0F);
-            double d0 = this.cavedweller.distanceToSqr(livingentity);
+            this.enderman.getLookControl().setLookAt(livingentity, 30.0F, 30.0F);
+            double d0 = this.enderman.distanceToSqr(livingentity);
             this.ticksUntilNextPathRecalculation = Math.max(this.ticksUntilNextPathRecalculation - 1, 0);
-            if ((this.followingTargetEvenIfNotSeen || this.cavedweller.getSensing().hasLineOfSight(livingentity))
+            if ((this.followingTargetEvenIfNotSeen || this.enderman.getSensing().hasLineOfSight(livingentity))
                     && this.ticksUntilNextPathRecalculation <= 0
                     && (this.pathedTargetX == 0.0 && this.pathedTargetY == 0.0 && this.pathedTargetZ == 0.0
                     || livingentity.distanceToSqr(this.pathedTargetX, this.pathedTargetY, this.pathedTargetZ) >= 1.0
-                    || this.cavedweller.getRandom().nextFloat() < 0.05F)) {
+                    || this.enderman.getRandom().nextFloat() < 0.05F)) {
                 this.pathedTargetX = livingentity.getX();
                 this.pathedTargetY = livingentity.getY();
                 this.pathedTargetZ = livingentity.getZ();
-                this.ticksUntilNextPathRecalculation = 4 + this.cavedweller.getRandom().nextInt(7);
+                this.ticksUntilNextPathRecalculation = 4 + this.enderman.getRandom().nextInt(7);
                 if (this.canPenalize) {
                     this.ticksUntilNextPathRecalculation = this.ticksUntilNextPathRecalculation + this.failedPathFindingPenalty;
-                    if (this.cavedweller.getNavigation().getPath() != null) {
-                        Node finalPathPoint = this.cavedweller.getNavigation().getPath().getEndNode();
+                    if (this.enderman.getNavigation().getPath() != null) {
+                        Node finalPathPoint = this.enderman.getNavigation().getPath().getEndNode();
                         if (finalPathPoint != null
                                 && livingentity.distanceToSqr(finalPathPoint.x, finalPathPoint.y, finalPathPoint.z) < 1.0) {
                             this.failedPathFindingPenalty = 0;
@@ -121,7 +121,7 @@ public class EndermanStalkGoal extends Goal {
                     this.ticksUntilNextPathRecalculation += 5;
                 }
 
-                if (!this.cavedweller.getNavigation().moveTo(livingentity, this.speedModifier)) {
+                if (!this.enderman.getNavigation().moveTo(livingentity, this.speedModifier)) {
                     this.ticksUntilNextPathRecalculation += 15;
                 }
 
@@ -129,7 +129,7 @@ public class EndermanStalkGoal extends Goal {
             }
         }
 
-        if (this.cavedweller.rRollResult == 3) {
+        if (this.enderman.rRollResult == 3) {
             this.flipClock++;
             if (this.flipClock > this.ticksTillFlip) {
                 this.flipToAggroOrFlee();
@@ -139,9 +139,9 @@ public class EndermanStalkGoal extends Goal {
 
     private void flipToAggroOrFlee() {
         if (this.rand.nextBoolean()) {
-            this.cavedweller.rRollResult = 0;
+            this.enderman.rRollResult = 0;
         } else {
-            this.cavedweller.rRollResult = 2;
+            this.enderman.rRollResult = 2;
         }
     }
 }

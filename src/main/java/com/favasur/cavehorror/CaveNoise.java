@@ -147,11 +147,11 @@ public class CaveNoise {
                 overworld.players().forEach(p -> this.listSpelunkers((ServerPlayer) p));
                 if (this.anySpelunkers && !this.spelunkers.isEmpty()) {
                     Player victim = this.spelunkers.get(rand.nextInt(this.spelunkers.size()));
-                    EndermanEntity cavedweller = new EndermanEntity(
+                    EndermanEntity enderman = new EndermanEntity(
                             ModEntityTypes.CAVE_DWELLER.get(), overworld);
-                    cavedweller.setInvisible(true);
-                    cavedweller.setPos(cavedweller.generatePos(victim));
-                    overworld.addFreshEntity(cavedweller);
+                    enderman.setInvisible(true);
+                    enderman.setPos(enderman.generatePos(victim));
+                    overworld.addFreshEntity(enderman);
                     this.resetCalmTimer();
                 }
             }

@@ -23,7 +23,7 @@ import java.util.Random;
 
 public class EndermanChaseGoal extends Goal {
     protected final PathfinderMob mob;
-    private final EndermanEntity cavedweller;
+    private final EndermanEntity enderman;
     private final double speedModifier;
     private double speedInLavaPerTick = 0.6;
     private final boolean followingTargetEvenIfNotSeen;
@@ -68,7 +68,7 @@ public class EndermanChaseGoal extends Goal {
         this.mob = pMob;
         this.speedModifier = pSpeedModifier;
         this.followingTargetEvenIfNotSeen = pFollowingTargetEvenIfNotSeen;
-        this.cavedweller = pEnderman;
+        this.enderman = pEnderman;
         this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
         this.ticksTillChase = pTicksTillChase;
         this.currentTicksTillChase = pTicksTillChase;
@@ -81,9 +81,9 @@ public class EndermanChaseGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        if (this.cavedweller.isInvisible()) {
+        if (this.enderman.isInvisible()) {
             return false;
-        } else if (this.cavedweller.rRollResult == 0 && !this.cavedweller.forcedStalk) {
+        } else if (this.enderman.rRollResult == 0 && !this.enderman.forcedStalk) {
             long i = this.mob.level().getGameTime();
             if (i - this.lastCanUseCheck < 20L) {
                 return false;
@@ -120,7 +120,7 @@ public class EndermanChaseGoal extends Goal {
         if (livingentity == null) {
             return false;
         } else if (!livingentity.isAlive()) {
-            this.cavedweller.discard();
+            this.enderman.discard();
             return false;
         } else if (!this.followingTargetEvenIfNotSeen) {
             return !this.mob.getNavigation().isDone();
@@ -141,13 +141,13 @@ public class EndermanChaseGoal extends Goal {
         if (!EntitySelector.NO_CREATIVE_OR_SPECTATOR.test(livingentity)) {
             this.mob.setTarget(null);
         }
-        this.cavedweller.squeezeCrawling = false;
-        this.cavedweller.getEntityData().set(EndermanEntity.AGGRO_ACCESSOR, false);
-        this.cavedweller.isAggro = false;
-        this.cavedweller.refreshDimensions();
+        this.enderman.squeezeCrawling = false;
+        this.enderman.getEntityData().set(EndermanEntity.AGGRO_ACCESSOR, false);
+        this.enderman.isAggro = false;
+        this.enderman.refreshDimensions();
         this.currentTicksTillChase = this.ticksTillChase;
         this.mob.getNavigation().stop();
-        this.cavedweller.setNoGravity(false);
+        this.enderman.setNoGravity(false);
     }
 
     @Override
@@ -158,14 +158,14 @@ public class EndermanChaseGoal extends Goal {
     public void tickAggroClock() {
         this.currentTicksTillChase--;
         if (this.currentTicksTillChase <= 0.0F) {
-            this.cavedweller.getEntityData().set(EndermanEntity.AGGRO_ACCESSOR, true);
+            this.enderman.getEntityData().set(EndermanEntity.AGGRO_ACCESSOR, true);
         }
-        this.cavedweller.isAggro = true;
-        this.cavedweller.refreshDimensions();
+        this.enderman.isAggro = true;
+        this.enderman.refreshDimensions();
     }
 
     public Path getShortPath(LivingEntity livingentity) {
-        return this.shortPath = this.cavedweller.createShortPath(livingentity);
+        return this.shortPath = this.enderman.createShortPath(livingentity);
     }
 
     public static double lerp(double a, double b, double f) {
@@ -173,7 +173,7 @@ public class EndermanChaseGoal extends Goal {
     }
 
     public void squeezingTick() {
-        this.cavedweller.setNoGravity(true);
+        this.enderman.setNoGravity(true);
         if (this.mob.getNavigation().getPath() != null) {
             this.nodePos = this.mob.getNavigation().getPath().getTarget();
         }
@@ -185,7 +185,7 @@ public class EndermanChaseGoal extends Goal {
                 this.vecNodePos = new Vec3(this.nodePos.getX(), this.nodePos.getY(), this.nodePos.getZ());
             }
             this.nodePositionCooldownPos = this.vecNodePos;
-            Vec3 vecOldMobPos = this.cavedweller.getViewVector(1.0F);
+            Vec3 vecOldMobPos = this.enderman.getViewVector(1.0F);
             if (this.xPathStartVec == null) {
                 if (vecOldMobPos.x < this.vecNodePos.x) {
                     this.xPathStartVec = new Vec3(this.vecNodePos.x - 1.0, this.vecNodePos.y - 1.0, this.vecNodePos.z + 0.5);
@@ -206,10 +206,10 @@ public class EndermanChaseGoal extends Goal {
             }
             BlockPos.MutableBlockPos mutableBlockPos = new BlockPos.MutableBlockPos(
                     this.xPathTargetVec.x, this.xPathTargetVec.y, this.xPathTargetVec.z);
-            BlockState blockstate = this.cavedweller.level().getBlockState(mutableBlockPos);
+            BlockState blockstate = this.enderman.level().getBlockState(mutableBlockPos);
             boolean xBlocked = blockstate.isSolid();
             mutableBlockPos = new BlockPos.MutableBlockPos(this.zPathTargetVec.x, this.zPathTargetVec.y, this.zPathTargetVec.z);
-            blockstate = this.cavedweller.level().getBlockState(mutableBlockPos);
+            blockstate = this.enderman.level().getBlockState(mutableBlockPos);
             boolean zBlocked = blockstate.isSolid();
             if (xBlocked) {
                 this.vecMobPos = this.zPathStartVec;
@@ -229,10 +229,10 @@ public class EndermanChaseGoal extends Goal {
                 Vec3 rotAxis = new Vec3(this.vecTargetPos.x - this.vecMobPos.x, 0.0, this.vecTargetPos.z - this.vecMobPos.z);
                 rotAxis = rotAxis.normalize();
                 double rotAngle = Math.toDegrees(Math.atan2(-rotAxis.x, rotAxis.z));
-                this.cavedweller.setYRot((float) rotAngle);
-                this.cavedweller.moveTo(vecCurrentMobPos.x, vecCurrentMobPos.y, vecCurrentMobPos.z, (float) rotAngle, (float) rotAngle);
+                this.enderman.setYRot((float) rotAngle);
+                this.enderman.moveTo(vecCurrentMobPos.x, vecCurrentMobPos.y, vecCurrentMobPos.z, (float) rotAngle, (float) rotAngle);
                 if (tickF >= 1.0F) {
-                    this.cavedweller.setPos(this.vecTargetPos.x, this.vecTargetPos.y, this.vecTargetPos.z);
+                    this.enderman.setPos(this.vecTargetPos.x, this.vecTargetPos.y, this.vecTargetPos.z);
                     this.stopSqueezing();
                 }
             } else {
@@ -243,8 +243,8 @@ public class EndermanChaseGoal extends Goal {
 
     public void stopSqueezing() {
         this.squeezing = false;
-        this.cavedweller.getEntityData().set(EndermanEntity.SQUEEZING_ACCESSOR, false);
-        this.cavedweller.setNoGravity(false);
+        this.enderman.getEntityData().set(EndermanEntity.SQUEEZING_ACCESSOR, false);
+        this.enderman.setNoGravity(false);
     }
 
     public void startSqueezing() {
@@ -257,7 +257,7 @@ public class EndermanChaseGoal extends Goal {
         this.vecTargetPos = null;
         this.currentTicksToSqueeze = 0;
         this.squeezing = true;
-        this.cavedweller.getEntityData().set(EndermanEntity.SQUEEZING_ACCESSOR, true);
+        this.enderman.getEntityData().set(EndermanEntity.SQUEEZING_ACCESSOR, true);
         this.nodePos = null;
     }
 
@@ -274,7 +274,7 @@ public class EndermanChaseGoal extends Goal {
                     return false;
                 } else {
                     BlockPos checkPos = new BlockPos(blockpos.getX(), blockpos.getY() + 1, blockpos.getZ());
-                    BlockState blockstate = this.cavedweller.level().getBlockState(checkPos);
+                    BlockState blockstate = this.enderman.level().getBlockState(checkPos);
                     return blockstate.isSolid();
                 }
             } else {
@@ -284,12 +284,12 @@ public class EndermanChaseGoal extends Goal {
     }
 
     public void aggroTick() {
-        this.cavedweller.playChaseSound();
+        this.enderman.playChaseSound();
         LivingEntity livingentity = this.mob.getTarget();
         if (this.mob.getNavigation().getPath() != null && this.checkIfShouldSqueeze(this.mob.getNavigation().getPath()) && this.shouldUseShortPath) {
             this.startSqueezing();
             this.squeezing = true;
-            this.cavedweller.getEntityData().set(EndermanEntity.SQUEEZING_ACCESSOR, true);
+            this.enderman.getEntityData().set(EndermanEntity.SQUEEZING_ACCESSOR, true);
         } else {
 
             if (livingentity != null) {
@@ -332,12 +332,12 @@ public class EndermanChaseGoal extends Goal {
 
                     if (!this.shouldUseShortPath) {
                         if (!this.mob.getNavigation().moveTo(livingentity, this.speedModifier)) {
-                            this.cavedweller.startedMovingChase = true;
+                            this.enderman.startedMovingChase = true;
                             this.ticksUntilNextPathRecalculation += 8;
                         }
                     } else {
                         if (!this.mob.getNavigation().moveTo(this.shortPath, this.speedModifier)) {
-                            this.cavedweller.startedMovingChase = true;
+                            this.enderman.startedMovingChase = true;
                             this.ticksUntilNextPathRecalculation += 8;
                         }
                     }
@@ -349,17 +349,17 @@ public class EndermanChaseGoal extends Goal {
                 this.checkAndPerformAttack(livingentity, d0);
             }
 
-            if (this.cavedweller.isInLava() && this.cavedweller.getNavigation().getPath() != null
-                    && this.cavedweller.getNavigation().getPath().getNextNodeIndex() < this.cavedweller.getNavigation().getPath().getNodeCount()) {
-                Vec3 a = this.cavedweller.position();
-                BlockPos b = this.cavedweller.getNavigation().getPath().getTarget();
+            if (this.enderman.isInLava() && this.enderman.getNavigation().getPath() != null
+                    && this.enderman.getNavigation().getPath().getNextNodeIndex() < this.enderman.getNavigation().getPath().getNodeCount()) {
+                Vec3 a = this.enderman.position();
+                BlockPos b = this.enderman.getNavigation().getPath().getTarget();
                 Vec3 dir = new Vec3(b.getX() - a.x, b.getY() - a.y, b.getZ() - a.z).normalize();
                 double dist = dir.length();
                 if (dist > this.speedInLavaPerTick) {
-                    this.cavedweller.setPos(this.cavedweller.position().add(
+                    this.enderman.setPos(this.enderman.position().add(
                             new Vec3(dir.x * this.speedInLavaPerTick, dir.y * this.speedInLavaPerTick, dir.z * this.speedInLavaPerTick)));
                 } else {
-                    this.cavedweller.setPos(new Vec3(b.getX(), b.getY(), b.getZ()));
+                    this.enderman.setPos(new Vec3(b.getX(), b.getY(), b.getZ()));
                 }
             }
         }
@@ -369,19 +369,19 @@ public class EndermanChaseGoal extends Goal {
 
     @Override
     public void tick() {
-        this.cavedweller.squeezeCrawling = this.squeezing;
-        LivingEntity livingentity = this.cavedweller.getTarget();
+        this.enderman.squeezeCrawling = this.squeezing;
+        LivingEntity livingentity = this.enderman.getTarget();
 
         this.tickAggroClock();
         if (!this.squeezing && livingentity != null) {
-            if (this.cavedweller.isAggro) {
+            if (this.enderman.isAggro) {
                 this.mob.getLookControl().setLookAt(livingentity, 90.0F, 90.0F);
             } else {
                 this.mob.getLookControl().setLookAt(livingentity, 180.0F, 1.0F);
             }
         }
 
-        if (this.cavedweller.getEntityData().get(EndermanEntity.AGGRO_ACCESSOR)) {
+        if (this.enderman.getEntityData().get(EndermanEntity.AGGRO_ACCESSOR)) {
             if (this.squeezing) {
                 this.squeezingTick();
             } else {
@@ -391,22 +391,22 @@ public class EndermanChaseGoal extends Goal {
 
         this.currentTicksTillLeave--;
         if (this.currentTicksTillLeave <= 0 && (!this.isPlayerLookingTowards() || !this.inPlayerLineOfSight())) {
-            this.cavedweller.discard();
+            this.enderman.discard();
         }
 
         this.currentBlock = new BlockPos(
-                (int) Math.floor(this.cavedweller.getX()), (int) Math.floor(this.cavedweller.getY()), (int) Math.floor(this.cavedweller.getZ()));
+                (int) Math.floor(this.enderman.getX()), (int) Math.floor(this.enderman.getY()), (int) Math.floor(this.enderman.getZ()));
         if (!this.currentBlock.equals(this.oldBlock)) {
             for (int dX = -this.torchDestructionRadius; dX < this.torchDestructionRadius + 1; dX++) {
                 for (int dY = -this.torchDestructionRadius; dY < this.torchDestructionRadius + 1; dY++) {
                     for (int dZ = -this.torchDestructionRadius; dZ < this.torchDestructionRadius + 1; dZ++) {
                         this.checkBlockForTorch = new BlockPos(
                                 this.currentBlock.getX() + dX, this.currentBlock.getY() + dY, this.currentBlock.getZ() + dZ);
-                        BlockState targetState = this.cavedweller.level().getBlockState(this.checkBlockForTorch);
+                        BlockState targetState = this.enderman.level().getBlockState(this.checkBlockForTorch);
                         if (targetState.is(Blocks.TORCH) || targetState.is(Blocks.WALL_TORCH)
                                 || targetState.is(Blocks.SOUL_TORCH) || targetState.is(Blocks.SOUL_WALL_TORCH)
                                 || targetState.is(Blocks.REDSTONE_TORCH) || targetState.is(Blocks.REDSTONE_WALL_TORCH)) {
-                            this.cavedweller.level().destroyBlock(this.checkBlockForTorch, true);
+                            this.enderman.level().destroyBlock(this.checkBlockForTorch, true);
                         }
                     }
                 }
@@ -416,7 +416,7 @@ public class EndermanChaseGoal extends Goal {
     }
 
     public boolean isPlayerLookingTowards() {
-        LivingEntity pendingTarget = this.cavedweller.getTarget();
+        LivingEntity pendingTarget = this.enderman.getTarget();
         if (pendingTarget == null) return false;
         Minecraft minecraft = Minecraft.getInstance();
         float fov = (float) (Integer) minecraft.options.fov().get();
@@ -425,7 +425,7 @@ public class EndermanChaseGoal extends Goal {
         fov *= fovMod;
 
         Vec3 a = pendingTarget.position();
-        Vec3 b = this.cavedweller.position();
+        Vec3 b = this.enderman.position();
         Vec2 dist = new Vec2((float) (b.x - a.x), (float) (b.z - a.z));
         dist = dist.normalized();
         double newAngle = Math.toDegrees(Math.atan2(dist.x, dist.y));
@@ -461,8 +461,8 @@ public class EndermanChaseGoal extends Goal {
     }
 
     public boolean inPlayerLineOfSight() {
-        LivingEntity pendingTarget = this.cavedweller.getTarget();
-        return pendingTarget != null && pendingTarget.hasLineOfSight(this.cavedweller);
+        LivingEntity pendingTarget = this.enderman.getTarget();
+        return pendingTarget != null && pendingTarget.hasLineOfSight(this.enderman);
     }
 
     protected void checkAndPerformAttack(LivingEntity pEnemy, double pDistToEnemySqr) {
@@ -472,7 +472,7 @@ public class EndermanChaseGoal extends Goal {
             this.mob.swing(InteractionHand.MAIN_HAND);
             this.mob.doHurtTarget(pEnemy);
             pEnemy.hurt(this.mob.damageSources().mobAttack(this.mob),
-                    (float) this.cavedweller.getAttributeValue(Attributes.ATTACK_DAMAGE));
+                    (float) this.enderman.getAttributeValue(Attributes.ATTACK_DAMAGE));
             if (pEnemy.getOffhandItem().is(Items.SHIELD)) {
                 pEnemy.getOffhandItem().hurtAndBreak(10000, pEnemy, EquipmentSlot.OFFHAND);
             }
