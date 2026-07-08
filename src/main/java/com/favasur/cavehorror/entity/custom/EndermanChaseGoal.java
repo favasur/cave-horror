@@ -148,6 +148,7 @@ public class EndermanChaseGoal extends Goal {
         this.currentTicksTillChase = this.ticksTillChase;
         this.mob.getNavigation().stop();
         this.enderman.setNoGravity(false);
+        this.enderman.rRollResult = 4;
     }
 
     @Override

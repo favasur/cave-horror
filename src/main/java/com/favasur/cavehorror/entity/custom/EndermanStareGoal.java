@@ -39,6 +39,7 @@ public class EndermanStareGoal extends Goal {
 
     @Override
     public void stop() {
+        this.enderman.rRollResult = 4;
     }
 
     public void tickStareClock() {

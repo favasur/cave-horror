@@ -57,6 +57,7 @@ public class EndermanFleeGoal extends Goal {
 
     @Override
     public void stop() {
+        this.enderman.rRollResult = 4;
     }
 
     public boolean isPlayerLookingTowards() {

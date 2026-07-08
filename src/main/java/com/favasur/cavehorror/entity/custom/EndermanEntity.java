@@ -234,7 +234,7 @@ public class EndermanEntity extends Monster implements GeoEntity {
     public void rRoll() {
         Random rand = new Random();
         this.forcedStalk = false;
-        this.rRollResult = rand.nextInt(4);
+        this.rRollResult = rand.nextInt(5);
     }
 
     public boolean shouldSpawnAsStalker() {
