@@ -6,6 +6,7 @@ import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.pathfinder.Node;
 import net.minecraft.world.level.pathfinder.Path;
 
+import java.util.EnumSet;
 import java.util.Random;
 
 public class EndermanStalkGoal extends Goal {
@@ -34,6 +35,7 @@ public class EndermanStalkGoal extends Goal {
         this.enderman = pEnderman;
         this.speedModifier = pSpeedModifier;
         this.ticksUntilNextSteal = 200 + this.rand.nextInt(200);
+        this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
     @Override

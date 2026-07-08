@@ -43,6 +43,7 @@ public class EndermanTargetTooCloseGoal extends NearestAttackableTargetGoal<Play
         this.enderman.getEntityData().set(EndermanEntity.AGGRO_ACCESSOR, true);
         this.enderman.isAggro = true;
         this.enderman.rRollResult = 0;
+        this.enderman.forcedStalk = false;
         this.target = this.pendingTarget;
         this.enderman.setTarget(this.pendingTarget);
         super.start();
