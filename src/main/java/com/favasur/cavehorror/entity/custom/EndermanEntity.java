@@ -103,6 +103,7 @@ public class EndermanEntity extends Monster implements GeoEntity {
         this.level().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).get(Enchantments.DEPTH_STRIDER).ifPresent(h -> enchantedBoots.enchant(h, 3));
         this.setItemSlot(EquipmentSlot.FEET, enchantedBoots);
         this.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 999999, 100, true, false));
+        this.setPersistenceRequired();
         if (this.shouldSpawnAsStalker()) {
             this.forcedStalk = true;
             this.rRollResult = 3;

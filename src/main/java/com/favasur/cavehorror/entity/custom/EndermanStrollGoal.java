@@ -12,11 +12,21 @@ public class EndermanStrollGoal extends WaterAvoidingRandomStrollGoal {
 
     @Override
     public boolean canUse() {
-        return super.canUse() && this.enderman.rRollResult == 4 && !this.enderman.forcedStalk;
+        if (this.enderman.forcedStalk) {
+            return false;
+        }
+        return super.canUse() && (this.enderman.rRollResult == 4 || this.enderman.getTarget() == null);
     }
 
     @Override
     public boolean canContinueToUse() {
-        return super.canContinueToUse() && this.enderman.rRollResult == 4;
+        if (this.enderman.forcedStalk) {
+            return false;
+        }
+        // Stop strolling if a target is acquired while in fallback mode
+        if (this.enderman.rRollResult != 4 && this.enderman.getTarget() != null) {
+            return false;
+        }
+        return super.canContinueToUse() && (this.enderman.rRollResult == 4 || this.enderman.getTarget() == null);
     }
 }
