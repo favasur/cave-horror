@@ -381,7 +381,7 @@ public class EndermanChaseGoal extends Goal {
                 this.mob.getLookControl().setLookAt(livingentity, 360.0F, 360.0F);
                 this.enderman.isAggro = false;
                 this.enderman.getEntityData().set(EndermanEntity.AGGRO_ACCESSOR, false);
-                this.currentTicksTillChase = this.ticksTillChase;
+                this.currentTicksTillChase = 0.0F;
                 return;
             }
         }
