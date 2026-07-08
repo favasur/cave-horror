@@ -103,7 +103,12 @@ public class EndermanEntity extends Monster implements GeoEntity {
         this.level().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).get(Enchantments.DEPTH_STRIDER).ifPresent(h -> enchantedBoots.enchant(h, 3));
         this.setItemSlot(EquipmentSlot.FEET, enchantedBoots);
         this.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 999999, 100, true, false));
-        this.forcedStalk = true;
+        if (this.shouldSpawnAsStalker()) {
+            this.forcedStalk = true;
+            this.rRollResult = 3;
+        } else {
+            this.rRoll();
+        }
     }
 
     public static AttributeSupplier setAttributes() {
@@ -130,12 +135,12 @@ public class EndermanEntity extends Monster implements GeoEntity {
 
     @Override
     protected void registerGoals() {
-        this.goalSelector.addGoal(2, new EndermanStareGoal(this, 100.0F));
-        this.goalSelector.addGoal(2, new EndermanChaseGoal(this, this, 0.85F, true, 20.0F));
+        this.goalSelector.addGoal(1, new EndermanBreakInvisGoal(this));
         this.goalSelector.addGoal(2, new EndermanFleeGoal(this, 20.0F, 1.0));
-        this.goalSelector.addGoal(2, new EndermanStalkGoal(this, 0.5, 15.0F));
-        this.goalSelector.addGoal(2, new EndermanStrollGoal(this, 0.7));
-        this.goalSelector.addGoal(2, new EndermanBreakInvisGoal(this));
+        this.goalSelector.addGoal(3, new EndermanChaseGoal(this, this, 0.85F, true, 20.0F));
+        this.goalSelector.addGoal(4, new EndermanStareGoal(this, 100.0F));
+        this.goalSelector.addGoal(5, new EndermanStalkGoal(this, 0.5, 15.0F));
+        this.goalSelector.addGoal(6, new EndermanStrollGoal(this, 0.7));
         this.targetSelector.addGoal(1, new EndermanTargetTooCloseGoal(this, 12.0F));
         this.targetSelector.addGoal(2, new EndermanTargetSeesMeGoal(this));
     }

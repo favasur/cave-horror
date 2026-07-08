@@ -1,27 +1,5 @@
-# Gradle
 build/
 .gradle/
-gradle/
-gradlew
-gradlew.bat
-*.iml
-.idea/
+runs/
 *.jar
-*.class
-
-# Eclipse
-.project
-.classpath
-.settings/
-bin/
-
-# VS Code
-.vscode/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Minecraft modding
-run/
-out/
+nul
