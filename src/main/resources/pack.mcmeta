@@ -1,0 +1,8 @@
+{
+  "pack": {
+    "description": "Cave Noise resources",
+    "pack_format": 34,
+    "forge:respack_format": 19,
+    "neoforge:respack_format": 19
+  }
+}
