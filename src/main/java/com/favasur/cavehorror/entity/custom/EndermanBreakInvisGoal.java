@@ -20,7 +20,7 @@ public class EndermanBreakInvisGoal extends Goal {
             return false;
         }
         this.pendingTarget = this.enderman.level().getNearestPlayer(this.enderman, 200.0);
-        return !this.inPlayerLineOfSight() || !this.isPlayerLookingTowards();
+        return this.inPlayerLineOfSight() && this.isPlayerLookingTowards();
     }
 
     @Override
