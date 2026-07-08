@@ -148,7 +148,6 @@ public class EndermanChaseGoal extends Goal {
         this.currentTicksTillChase = this.ticksTillChase;
         this.mob.getNavigation().stop();
         this.enderman.setNoGravity(false);
-        this.enderman.rRollResult = 4;
     }
 
     @Override
@@ -373,6 +372,20 @@ public class EndermanChaseGoal extends Goal {
         this.enderman.squeezeCrawling = this.squeezing;
         LivingEntity livingentity = this.enderman.getTarget();
 
+        // Weeping angel freeze mechanic: if player is looking at entity and not too close, freeze in place
+        if (livingentity instanceof Player player && !this.squeezing && this.inPlayerLineOfSight() && this.isPlayerLookingTowards()) {
+            double distToPlayer = this.enderman.distanceTo(player);
+            if (distToPlayer > 4.0) {
+                // FREEZE: stop all movement and stare at player
+                this.enderman.getNavigation().stop();
+                this.mob.getLookControl().setLookAt(livingentity, 360.0F, 360.0F);
+                this.enderman.isAggro = false;
+                this.enderman.getEntityData().set(EndermanEntity.AGGRO_ACCESSOR, false);
+                this.currentTicksTillChase = this.ticksTillChase;
+                return;
+            }
+        }
+
         this.tickAggroClock();
         if (!this.squeezing && livingentity != null) {
             if (this.enderman.isAggro) {
@@ -407,7 +420,8 @@ public class EndermanChaseGoal extends Goal {
                         if (targetState.is(Blocks.TORCH) || targetState.is(Blocks.WALL_TORCH)
                                 || targetState.is(Blocks.SOUL_TORCH) || targetState.is(Blocks.SOUL_WALL_TORCH)
                                 || targetState.is(Blocks.REDSTONE_TORCH) || targetState.is(Blocks.REDSTONE_WALL_TORCH)) {
-                            this.enderman.level().destroyBlock(this.checkBlockForTorch, true);
+                            // Silently destroy torch — no particles, no item drop
+                            this.enderman.level().destroyBlock(this.checkBlockForTorch, false);
                         }
                     }
                 }

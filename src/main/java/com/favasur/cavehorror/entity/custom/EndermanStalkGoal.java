@@ -1,5 +1,6 @@
 package com.favasur.cavehorror.entity.custom;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.pathfinder.Node;
@@ -26,11 +27,13 @@ public class EndermanStalkGoal extends Goal {
     private final float distanceForAggro;
     private LivingEntity stalkingTarget;
     private final Random rand = new Random();
+    private int ticksUntilNextSteal;
 
     public EndermanStalkGoal(EndermanEntity pEnderman, double pSpeedModifier, float pDistanceForAggro) {
         this.distanceForAggro = pDistanceForAggro;
         this.enderman = pEnderman;
         this.speedModifier = pSpeedModifier;
+        this.ticksUntilNextSteal = 200 + this.rand.nextInt(200);
     }
 
     @Override
@@ -69,6 +72,7 @@ public class EndermanStalkGoal extends Goal {
     public void start() {
         this.enderman.getEntityData().set(EndermanEntity.STALKING_ACCESSOR, true);
         this.ticksTillFlip = this.minTicksTillFlip + this.rand.nextInt(this.maxTicksTillFlip - this.minTicksTillFlip);
+        this.ticksUntilNextSteal = 200 + this.rand.nextInt(200);
         super.start();
     }
 
@@ -127,6 +131,20 @@ public class EndermanStalkGoal extends Goal {
 
                 this.ticksUntilNextPathRecalculation = this.reducedTickDelay(this.ticksUntilNextPathRecalculation);
             }
+
+            // Block stealing: only steal when player isn't looking at the entity
+            this.ticksUntilNextSteal--;
+            if (this.ticksUntilNextSteal <= 0) {
+                BlockPos playerPos = livingentity.blockPosition();
+                // Only steal if player has no line of sight to the entity (not watching)
+                if (!livingentity.hasLineOfSight(this.enderman)) {
+                    this.enderman.stealBlockNear(playerPos, 8);
+                    this.ticksUntilNextSteal = 400 + this.rand.nextInt(400);
+                } else {
+                    // Player is watching - delay and try again soon
+                    this.ticksUntilNextSteal = 60 + this.rand.nextInt(60);
+                }
+            }
         }
 
         if (this.enderman.rRollResult == 3) {
@@ -138,10 +156,6 @@ public class EndermanStalkGoal extends Goal {
     }
 
     private void flipToAggroOrFlee() {
-        if (this.rand.nextBoolean()) {
-            this.enderman.rRollResult = 0;
-        } else {
-            this.enderman.rRollResult = 2;
-        }
+        this.enderman.rRollResult = 0;
     }
 }

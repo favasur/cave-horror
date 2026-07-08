@@ -93,7 +93,8 @@ public class EndermanTargetSeesMeGoal extends NearestAttackableTargetGoal<Player
         this.enderman.setTarget(this.pendingTarget);
         this.enderman.spottedByPlayer = true;
         this.enderman.getEntityData().set(EndermanEntity.SPOTTED_ACCESSOR, true);
-        this.enderman.rRoll();
+        this.enderman.rRollResult = 0;
+        this.enderman.forcedStalk = false;
         super.start();
     }
 

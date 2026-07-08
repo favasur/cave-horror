@@ -2,6 +2,7 @@ package com.favasur.cavehorror.entity.custom;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.BlockPos.MutableBlockPos;
+import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -20,12 +21,18 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
-import net.minecraft.core.particles.DustParticleOptions;
+
+import java.util.HashSet;
+import java.util.Random;
+import java.util.Set;
+
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.animatable.instance.SingletonAnimatableInstanceCache;
@@ -36,14 +43,11 @@ import software.bernie.geckolib.animation.PlayState;
 import software.bernie.geckolib.animation.RawAnimation;
 import software.bernie.geckolib.animation.AnimatableManager.ControllerRegistrar;
 
-import java.util.Random;
-
 public class EndermanEntity extends Monster implements GeoEntity {
     private final AnimatableInstanceCache cache = new SingletonAnimatableInstanceCache(this);
     public int rRollResult = 4;
     public boolean forcedStalk = false;
     public boolean isAggro;
-    private final float chanceOfSpawningAsStalker = 0.6F;
     private boolean returnShort = false;
     private boolean inTwoBlockSpace = false;
     public boolean spottedByPlayer = false;
@@ -68,6 +72,25 @@ public class EndermanEntity extends Monster implements GeoEntity {
     private final RawAnimation CLIMB = RawAnimation.begin().then("animation.enderman.climb", LoopType.LOOP);
     private RawAnimation currentAnim;
 
+    // Blocks the entity can steal from player builds during stalking
+    public static final Set<Block> STEALABLE_BLOCKS = Set.of(
+            Blocks.DIRT, Blocks.GRASS_BLOCK, Blocks.COBBLESTONE, Blocks.STONE,
+            Blocks.OAK_PLANKS, Blocks.SPRUCE_PLANKS, Blocks.BIRCH_PLANKS,
+            Blocks.JUNGLE_PLANKS, Blocks.ACACIA_PLANKS, Blocks.DARK_OAK_PLANKS,
+            Blocks.OAK_LOG, Blocks.SPRUCE_LOG, Blocks.BIRCH_LOG,
+            Blocks.GLASS, Blocks.GLASS_PANE,
+            Blocks.WHITE_WOOL, Blocks.ORANGE_WOOL, Blocks.MAGENTA_WOOL,
+            Blocks.LIGHT_BLUE_WOOL, Blocks.YELLOW_WOOL, Blocks.LIME_WOOL,
+            Blocks.PINK_WOOL, Blocks.GRAY_WOOL, Blocks.LIGHT_GRAY_WOOL,
+            Blocks.CYAN_WOOL, Blocks.PURPLE_WOOL, Blocks.BLUE_WOOL,
+            Blocks.BROWN_WOOL, Blocks.GREEN_WOOL, Blocks.RED_WOOL, Blocks.BLACK_WOOL,
+            Blocks.BOOKSHELF, Blocks.OAK_FENCE, Blocks.SPRUCE_FENCE,
+            Blocks.OAK_FENCE_GATE, Blocks.STONE_BRICKS,
+            Blocks.SAND, Blocks.GRAVEL, Blocks.CLAY, Blocks.SNOW_BLOCK,
+            Blocks.OAK_DOOR, Blocks.SPRUCE_DOOR, Blocks.BIRCH_DOOR,
+            Blocks.JUNGLE_DOOR, Blocks.ACACIA_DOOR, Blocks.DARK_OAK_DOOR
+    );
+
     public static final EntityDataAccessor<Boolean> FLEEING_ACCESSOR = SynchedEntityData.defineId(EndermanEntity.class, EntityDataSerializers.BOOLEAN);
     public static final EntityDataAccessor<Boolean> CROUCHING_ACCESSOR = SynchedEntityData.defineId(EndermanEntity.class, EntityDataSerializers.BOOLEAN);
     public static final EntityDataAccessor<Boolean> AGGRO_ACCESSOR = SynchedEntityData.defineId(EndermanEntity.class, EntityDataSerializers.BOOLEAN);
@@ -81,7 +104,6 @@ public class EndermanEntity extends Monster implements GeoEntity {
     private int climbSoundClockReset = 10;
     private int climbSoundClock = 0;
     private int chaseSoundClock = 0;
-    private boolean alreadyPlayedFleeSound = false;
     private boolean alreadyPlayedSpottedSound = false;
     private boolean startedPlayingChaseSound = false;
     private boolean alreadyPlayedDeathSound = false;
@@ -104,12 +126,7 @@ public class EndermanEntity extends Monster implements GeoEntity {
         this.setItemSlot(EquipmentSlot.FEET, enchantedBoots);
         this.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 999999, 100, true, false));
         this.setPersistenceRequired();
-        if (this.shouldSpawnAsStalker()) {
-            this.forcedStalk = true;
-            this.rRollResult = 3;
-        } else {
-            this.rRoll();
-        }
+        this.forcedStalk = true;
     }
 
     public static AttributeSupplier setAttributes() {
@@ -136,12 +153,9 @@ public class EndermanEntity extends Monster implements GeoEntity {
 
     @Override
     protected void registerGoals() {
-        this.goalSelector.addGoal(1, new EndermanBreakInvisGoal(this));
-        this.goalSelector.addGoal(2, new EndermanFleeGoal(this, 20.0F, 1.0));
-        this.goalSelector.addGoal(3, new EndermanChaseGoal(this, this, 0.85F, true, 20.0F));
-        this.goalSelector.addGoal(4, new EndermanStareGoal(this, 100.0F));
-        this.goalSelector.addGoal(5, new EndermanStalkGoal(this, 0.5, 15.0F));
-        this.goalSelector.addGoal(6, new EndermanStrollGoal(this, 0.7));
+        this.goalSelector.addGoal(2, new EndermanBreakInvisGoal(this));
+        this.goalSelector.addGoal(2, new EndermanChaseGoal(this, this, 0.85F, true, 20.0F));
+        this.goalSelector.addGoal(2, new EndermanStalkGoal(this, 0.5, 15.0F));
         this.targetSelector.addGoal(1, new EndermanTargetTooCloseGoal(this, 12.0F));
         this.targetSelector.addGoal(2, new EndermanTargetSeesMeGoal(this));
     }
@@ -235,13 +249,7 @@ public class EndermanEntity extends Monster implements GeoEntity {
     public void rRoll() {
         Random rand = new Random();
         this.forcedStalk = false;
-        this.rRollResult = rand.nextInt(5);
-    }
-
-    public boolean shouldSpawnAsStalker() {
-        Random rand = new Random();
-        float stalkerResult = rand.nextFloat();
-        return stalkerResult < this.chanceOfSpawningAsStalker;
+        this.rRollResult = rand.nextInt(4);
     }
 
     public Path createShortPath(LivingEntity pathTarget) {
@@ -305,12 +313,6 @@ public class EndermanEntity extends Monster implements GeoEntity {
         return this.cache;
     }
 
-    @Override
-    protected void playStepSound(BlockPos pPos, BlockState pState) {
-        super.playStepSound(pPos, pState);
-        this.level().playSound(null, this, SoundEvents.ENDERMAN_AMBIENT, SoundSource.HOSTILE, 0.4F, 1.0F);
-    }
-
     public void playChaseSound() {
         if (this.startedPlayingChaseSound || this.isMoving()) {
             if (this.chaseSoundClock <= 0) {
@@ -332,13 +334,6 @@ public class EndermanEntity extends Monster implements GeoEntity {
             this.resetClimbSoundClock();
         }
         this.climbSoundClock--;
-    }
-
-    public void playFleeSound() {
-        if (!this.alreadyPlayedFleeSound) {
-            this.level().playSound(null, this, SoundEvents.ENDERMAN_TELEPORT, SoundSource.HOSTILE, 3.0F, 1.0F);
-            this.alreadyPlayedFleeSound = true;
-        }
     }
 
     public void playSpottedSound() {
@@ -412,6 +407,69 @@ public class EndermanEntity extends Monster implements GeoEntity {
 
     private void resetClimbSoundClock() {
         this.climbSoundClock = this.climbSoundClockReset;
+    }
+
+    /**
+     * Find a stealable block near the given position and break it with teleport effects.
+     * @return true if a block was stolen
+     */
+    public boolean stealBlockNear(BlockPos center, int radius) {
+        Random rand = new Random();
+        for (int attempt = 0; attempt < 20; attempt++) {
+            int x = center.getX() + rand.nextInt(radius * 2 + 1) - radius;
+            int y = center.getY() + rand.nextInt(radius * 2 + 1) - radius;
+            int z = center.getZ() + rand.nextInt(radius * 2 + 1) - radius;
+            BlockPos targetPos = new BlockPos(x, y, z);
+            BlockState targetState = this.level().getBlockState(targetPos);
+            Block targetBlock = targetState.getBlock();
+
+            // Skip air, fluids, torches, and non-stealable blocks
+            if (targetState.isAir() || targetState.liquid()) continue;
+            if (targetState.is(Blocks.BEDROCK) || targetState.is(Blocks.OBSIDIAN)) continue;
+            if (targetState.is(Blocks.TORCH) || targetState.is(Blocks.WALL_TORCH)) continue;
+            if (!STEALABLE_BLOCKS.contains(targetBlock)) continue;
+
+            // Break the block with teleport effects
+            this.level().destroyBlock(targetPos, true, this);
+            this.level().playSound(null, targetPos, SoundEvents.ENDERMAN_TELEPORT, SoundSource.HOSTILE, 2.0F, 1.0F);
+
+            // Spawn teleport particles at the block position
+            if (this.level().isClientSide()) {
+                for (int i = 0; i < 8; i++) {
+                    this.level().addParticle(
+                            new DustParticleOptions(new Vector3f(0.3F, 0.0F, 0.6F), 1.0F),
+                            targetPos.getX() + rand.nextDouble(),
+                            targetPos.getY() + rand.nextDouble(),
+                            targetPos.getZ() + rand.nextDouble(),
+                            (rand.nextDouble() - 0.5) * 0.5,
+                            rand.nextDouble() * 0.5,
+                            (rand.nextDouble() - 0.5) * 0.5
+                    );
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Spawn smoke/flame particles when a torch is destroyed by the entity.
+     */
+    public void spawnTorchDestroyParticles(BlockPos torchPos) {
+        if (this.level().isClientSide()) {
+            Random rand = new Random();
+            for (int i = 0; i < 6; i++) {
+                this.level().addParticle(
+                        new DustParticleOptions(new Vector3f(1.0F, 0.5F, 0.0F), 1.0F),
+                        torchPos.getX() + 0.5 + (rand.nextDouble() - 0.5) * 0.8,
+                        torchPos.getY() + 0.5 + (rand.nextDouble() - 0.5) * 0.8,
+                        torchPos.getZ() + 0.5 + (rand.nextDouble() - 0.5) * 0.8,
+                        (rand.nextDouble() - 0.5) * 0.2,
+                        rand.nextDouble() * 0.3,
+                        (rand.nextDouble() - 0.5) * 0.2
+                );
+            }
+        }
     }
 
     @Override
