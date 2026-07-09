@@ -1,6 +1,8 @@
 package com.favasur.cavehorror.entity;
 
 import com.favasur.cavehorror.CaveNoisePlugin;
+import com.hytale.api.HytaleServer;
+import com.hytale.api.entity.EntityType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -8,7 +10,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Tracks all active Enderman entities across the world.
- * Handles registration, proximity checks, and mass despawn.
+ * Uses HytaleServer.getEntityRegistry() for registration and
+ * HytaleServer.getEntityService() for spawning.
  */
 public class EndermanRegistry {
 
@@ -20,17 +23,17 @@ public class EndermanRegistry {
     }
     
     public void register() {
-        // HYTALE API: EntityAPI.register("cave_dweller", EndermanEntity.class, ...)
-        CaveNoisePlugin.getLogger().info("Registered Cave Dweller entity type.");
+        // Entity type is registered in CaveNoisePlugin.onEnable() 
+        // via HytaleServer.getEntityRegistry().register(definition)
+        CaveNoisePlugin.getLogger().info("Registered Cave Dweller entity type: {}",
+            EndermanEntity.ENTITY_TYPE_ID);
     }
     
     public EndermanEntity spawnAt(double x, double y, double z) {
-        EndermanEntity entity = new EndermanEntity(plugin, x, y, z);
-        entity.setInvisible(true);
-        entity.setPersistent(true);
-        // HYTALE API: HytaleAPI.getWorld().spawnEntity(entity);
-        activeEntities.add(entity);
-        return entity;
+        // Use the entity service to spawn — returns a native Entity
+        // The actual spawning is handled by EntitySpawnSystem to include validation
+        CaveNoisePlugin.getLogger().warn("Direct spawnAt() called — use EntitySpawnSystem instead.");
+        return null;
     }
     
     public void track(EndermanEntity entity) {

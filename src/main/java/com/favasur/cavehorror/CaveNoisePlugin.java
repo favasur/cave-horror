@@ -4,37 +4,53 @@ import com.favasur.cavehorror.entity.EndermanEntity;
 import com.favasur.cavehorror.entity.EndermanEntity.State;
 import com.favasur.cavehorror.entity.EndermanRegistry;
 import com.favasur.cavehorror.entity.custom.*;
+import com.favasur.cavehorror.torch.PluginConfig;
 import com.favasur.cavehorror.torch.TorchBurnoutSystem;
+import com.hytale.api.plugin.JavaPlugin;
+import com.hytale.api.events.EventHandler;
+import com.hytale.api.events.EventPriority;
+import com.hytale.api.events.Subscribe;
+import com.hytale.api.events.player.PlayerJoinEvent;
+import com.hytale.api.events.player.PlayerMoveEvent;
+import com.hytale.api.events.player.PlayerQuitEvent;
+import com.hytale.api.events.server.ServerTickEvent;
+import com.hytale.api.events.entity.EntityDamageEvent;
+import com.hytale.api.events.entity.EntityDamageByEntityEvent;
+import com.hytale.api.world.Location;
+import com.hytale.api.world.Vector3f;
+import com.hytale.api.world.Block;
+import com.hytale.api.world.Material;
+import com.hytale.api.entity.Entity;
+import com.hytale.api.entity.EntityType;
+import com.hytale.api.player.Player;
+import com.hytale.api.HytaleServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Cave Horror: White Eyes — Hytale Plugin
  * 
- * Ported from Minecraft NeoForge mod. Replicates the ambient horror experience:
- * - White-eyes enderman entity that stalks players in caves
- * - Ambient cave sounds that intensify near the entity
- * - Torch burnout mechanics
- * - Entity spawns behind players in deep caves
+ * Main plugin class. Extends JavaPlugin as required by the Hytale plugin API.
+ * Manages the ambient horror experience: stalking entity, cave sounds, torch burnout.
  * 
- * == HYTALE API ==
- * Uses com.hytale.* ECS-based API:
- * - Server.get().getPlayerManager().getOnlinePlayers()
- * - Entity components: IdentityComponent, PositionComponent, RotationComponent, GamemodeComponent
- * - World: world.getBlockAt(x, y, z)
- * - Events: @EventHandler with EventBus
- * - Sounds: SoundManager.playSound(soundId, position, volume, pitch)
+ * == HYTALE API INTEGRATION ==
+ * Uses com.hytale.api.* service-oriented API:
+ * - HytaleServer.getPlayerService().getOnlinePlayers()
+ * - HytaleServer.getAudioService().playSound(soundId, location, volume, pitch)
+ * - HytaleServer.getWorldService().getBlock(worldName, x, y, z)
+ * - HytaleServer.getEntityService().spawn(entityType, location)
+ * - HytaleServer.getEntityRegistry().register(entityDefinition)
+ * - @Subscribe annotation for event handlers
+ * - HytaleServer.getScheduler() for timed tasks
  */
-public class CaveNoisePlugin {
+public class CaveNoisePlugin extends JavaPlugin {
 
     public static final String PLUGIN_ID = "cave-horror-white-eyes";
     private static final Logger LOGGER = LoggerFactory.getLogger(PLUGIN_ID);
@@ -46,14 +62,13 @@ public class CaveNoisePlugin {
     private EntitySpawnSystem spawnSystem;
     private TorchBurnoutSystem torchSystem;
     private EndermanRegistry endermanRegistry;
-    
-    private ScheduledExecutorService scheduler;
+    private PluginConfig pluginConfig;
     
     // Stalker proximity tracking
     private final ConcurrentHashMap<UUID, Boolean> playerHasStalker = new ConcurrentHashMap<>();
     private static final double STALKER_PROXIMITY_RANGE = 300.0;
     
-    // Timer state (in ticks, 20 ticks = 1 second)
+    // Timer state (in ticks)
     private int calmTimer = 0;
     private int noiseTimer = 0;
     private int stalkNoiseTimer = 0;
@@ -69,31 +84,29 @@ public class CaveNoisePlugin {
     
     private final Random random = new Random();
     
-    // ---- LIFECYCLE ----
-    // HYTALE API: public class CaveNoisePlugin extends Plugin { ... }
+    // Cached player snapshots updated per tick
+    private final List<PlayerData> cachedPlayers = new ArrayList<>();
     
+    // ---- LIFECYCLE ----
+    
+    @Override
     public void onEnable() {
         instance = this;
         LOGGER.info("Cave Horror: White Eyes initializing...");
+        
+        this.pluginConfig = new PluginConfig(this);
+        this.pluginConfig.load();
         
         this.soundSystem = new AmbientSoundSystem(this);
         this.spawnSystem = new EntitySpawnSystem(this);
         this.torchSystem = new TorchBurnoutSystem(this);
         this.endermanRegistry = new EndermanRegistry(this);
         
-        // HYTALE API: Register event listeners
-        // Server.get().getEventBus().register(this);
+        // Register event listeners
+        HytaleServer.getEventBus().register(this);
         
-        // HYTALE API: Register entity type with ECS
-        // EntityTypeRegistry.get().register("cave_dweller", EndermanEntity::new);
-        
-        // HYTALE API: Use server tick event instead of custom scheduler
-        // @EventHandler public void onServerTick(ServerTickEvent event) { serverTick(); }
-        this.scheduler = Executors.newSingleThreadScheduledExecutor();
-        this.scheduler.scheduleAtFixedRate(this::serverTick, 0, 50, TimeUnit.MILLISECONDS);
-        
-        // HYTALE API: Register commands
-        // CommandManager.get().register("cavehorror", new CaveHorrorCommand(this));
+        // Register custom entity type with the entity registry
+        HytaleServer.getEntityRegistry().register(new EndermanEntity.EndermanEntityDefinition(this));
         
         resetCalmTimer();
         resetNoiseTimer();
@@ -102,38 +115,77 @@ public class CaveNoisePlugin {
         LOGGER.info("Cave Horror: White Eyes initialized successfully.");
     }
     
+    @Override
     public void onDisable() {
         LOGGER.info("Cave Horror: White Eyes shutting down...");
-        if (scheduler != null && !scheduler.isShutdown()) scheduler.shutdown();
         endermanRegistry.despawnAll();
         LOGGER.info("Cave Horror: White Eyes shut down.");
+    }
+    
+    // ---- EVENT HANDLERS ----
+    
+    /**
+     * Server tick event — drives all game logic every tick (20 times/sec).
+     * Replaces the old ScheduledExecutorService approach.
+     */
+    @Subscribe
+    public void onServerTick(ServerTickEvent event) {
+        // Collect player data from the API
+        cachedPlayers.clear();
+        Collection<Player> onlinePlayers = HytaleServer.getPlayerService().getOnlinePlayers();
+        
+        for (Player player : onlinePlayers) {
+            Location pos = player.getLocation();
+            boolean spectator = player.getGamemode() == com.hytale.api.world.Gamemode.SPECTATOR
+                             || player.getGamemode() == com.hytale.api.world.Gamemode.CREATIVE;
+            boolean canSeeSky = player.getWorld().getHighestBlockYAt(
+                (int)pos.getX(), (int)pos.getZ()) <= (int)pos.getY();
+            
+            cachedPlayers.add(new PlayerData(
+                player.getUniqueId(),
+                pos.getX(), pos.getY(), pos.getZ(),
+                player.getLocation().getYaw(), player.getLocation().getPitch(),
+                spectator, canSeeSky,
+                player
+            ));
+        }
+        
+        if (!cachedPlayers.isEmpty()) {
+            serverTick(cachedPlayers);
+        }
+    }
+    
+    @Subscribe
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        LOGGER.info("Player {} joined. The darkness watches.", event.getPlayer().getName());
+    }
+    
+    @Subscribe
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        UUID uuid = event.getPlayer().getUniqueId();
+        // Despawn any entities targeting this player
+        for (EndermanEntity enderman : endermanRegistry.getActiveEntities()) {
+            if (uuid.toString().equals(enderman.getTargetPlayerId())) {
+                enderman.despawn();
+            }
+        }
+    }
+    
+    @Subscribe(priority = EventPriority.HIGH)
+    public void onEntityDamage(EntityDamageByEntityEvent event) {
+        // Prevent enderman from taking damage from non-player sources (keeps it scary)
+        if (event.getEntity() instanceof EndermanEntity) {
+            if (!(event.getDamager() instanceof Player)) {
+                event.setCancelled(true);
+            }
+        }
     }
     
     // ---- MAIN TICK ----
     
     /**
-     * Called by scheduler or @EventHandler(ServerTickEvent).
-     * HYTALE API: Use Server.get().getPlayerManager().getOnlinePlayers() to get players.
-     */
-    public void serverTick() {
-        // HYTALE API:
-        // List<PlayerData> players = new ArrayList<>();
-        // for (Entity player : Server.get().getPlayerManager().getOnlinePlayers()) {
-        //     IdentityComponent id = player.getComponent(IdentityComponent.class);
-        //     PositionComponent pos = player.getComponent(PositionComponent.class);
-        //     RotationComponent rot = player.getComponent(RotationComponent.class);
-        //     GamemodeComponent gm = player.getComponent(GamemodeComponent.class);
-        //     boolean spectator = gm != null && gm.getGamemode() == Gamemode.SPECTATOR;
-        //     boolean canSeeSky = !Server.get().getWorld().isBelowSolidBlock(
-        //         (int)pos.getX(), (int)pos.getY(), (int)pos.getZ());
-        //     players.add(new PlayerData(id.getUuid(), pos.getX(), pos.getY(), pos.getZ(),
-        //         rot.getLookX(), rot.getLookZ(), spectator, canSeeSky));
-        // }
-        // serverTick(players);
-    }
-    
-    /**
-     * Main server tick logic — handles ambient sounds, spawning, entity AI.
+     * Main server tick logic — ambient sounds, spawning, entity AI dispatch.
+     * Called once per ServerTickEvent (20 times/sec).
      */
     private void serverTick(List<PlayerData> players) {
         if (players.isEmpty()) return;
@@ -195,9 +247,9 @@ public class CaveNoisePlugin {
             if (!spelunkers.isEmpty() && random.nextDouble() <= SPAWN_CHANCE_PER_TICK) {
                 PlayerData victim = spelunkers.get(random.nextInt(spelunkers.size()));
                 EndermanEntity entity = spawnSystem.spawnEndermanBehind(
-                    victim.uuid, victim.x, victim.y, victim.z, victim.lookX, victim.lookZ);
+                    victim.uuid, victim.x, victim.y, victim.z,
+                    victim.lookYaw, victim.lookPitch);
                 if (entity != null) {
-                    // Create AI goals for the new entity
                     entity.initAI();
                 }
                 resetCalmTimer();
@@ -205,7 +257,6 @@ public class CaveNoisePlugin {
         }
         
         // === ENTITY AI TICK ===
-        // Evaluate targeting and dispatch goals for each entity-player pair
         for (EndermanEntity enderman : endermanRegistry.getActiveEntities()) {
             if (!enderman.isAlive()) continue;
             
@@ -220,8 +271,9 @@ public class CaveNoisePlugin {
             if (target == null) continue;
             
             // Run targeting goals to detect state transitions
+            double[] lookVector = yawPitchToLookVector(target.lookYaw, target.lookPitch);
             boolean seeMe = enderman.getTargetSeesMeGoal().canUse(
-                target.x, target.y, target.z, target.lookX, target.lookZ, target.spectator);
+                target.x, target.y, target.z, lookVector[0], lookVector[1], lookVector[2], target.spectator);
             boolean tooClose = enderman.getTargetTooCloseGoal().canUse(
                 target.x, target.y, target.z, target.spectator);
             
@@ -235,13 +287,23 @@ public class CaveNoisePlugin {
             boolean playerLooking = isPlayerLookingAtEntity(target, enderman);
             
             // Dispatch to the active state's goal
-            enderman.tickAI(target.x, target.y, target.z, target.lookX, target.lookZ, 
+            enderman.tickAI(target.x, target.y, target.z,
+                           lookVector[0], lookVector[1], lookVector[2],
                            target.spectator, playerLooking);
         }
         
         // Physics tick for all entities
         for (EndermanEntity enderman : endermanRegistry.getActiveEntities()) {
             enderman.tickPhysics();
+        }
+        
+        // Torch burnout tick
+        for (PlayerData player : players) {
+            if (!playerHasStalker.getOrDefault(player.uuid, false)) continue;
+            int depth = (int)(player.world.getHighestBlockYAt((int)player.x, (int)player.z) - player.y);
+            if (depth > 30) {
+                torchSystem.extinguishNearby(player.x, player.y, player.z, depth);
+            }
         }
         
         endermanRegistry.cleanDead();
@@ -257,11 +319,7 @@ public class CaveNoisePlugin {
         if (len == 0) return false;
         dx /= len; dz /= len;
         
-        double lookLen = Math.sqrt(player.lookX * player.lookX + player.lookZ * player.lookZ);
-        if (lookLen == 0) return false;
-        double nlx = player.lookX / lookLen, nlz = player.lookZ / lookLen;
-        
-        return dx * nlx + dz * nlz > 0.819; // cos(35°)
+        return dx * player.lookX + dz * player.lookZ > 0.819; // cos(35°)
     }
     
     // ---- TIMERS ----
@@ -286,32 +344,54 @@ public class CaveNoisePlugin {
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
     
+    /**
+     * Convert yaw/pitch to a normalized look direction vector (x, y, z).
+     */
+    private double[] yawPitchToLookVector(float yaw, float pitch) {
+        double yawRad = Math.toRadians(yaw);
+        double pitchRad = Math.toRadians(pitch);
+        double x = -Math.sin(yawRad) * Math.cos(pitchRad);
+        double z = Math.cos(yawRad) * Math.cos(pitchRad);
+        double y = -Math.sin(pitchRad);
+        return new double[]{x, y, z};
+    }
+    
     // ---- ACCESSORS ----
     
     public static CaveNoisePlugin getInstance() { return instance; }
     public EndermanRegistry getEndermanRegistry() { return endermanRegistry; }
+    public AmbientSoundSystem getSoundSystem() { return soundSystem; }
     public TorchBurnoutSystem getTorchSystem() { return torchSystem; }
+    public EntitySpawnSystem getSpawnSystem() { return spawnSystem; }
+    public PluginConfig getPluginConfig() { return pluginConfig; }
     public Random getRandom() { return random; }
     public static Logger getLogger() { return LOGGER; }
     
     /**
      * Lightweight player state snapshot for one tick.
-     * HYTALE API: Populate from Entity components:
-     * IdentityComponent (uuid), PositionComponent (xyz),
-     * RotationComponent (lookX/lookZ), GamemodeComponent (spectator).
      */
     public static class PlayerData {
         public final UUID uuid;
         public final double x, y, z;
+        public final float lookYaw, lookPitch;
         public final double lookX, lookZ;
         public final boolean spectator;
         public final boolean canSeeSky;
+        public final com.hytale.api.world.World world;
+        public final Player player;
         
         public PlayerData(UUID uuid, double x, double y, double z,
-                          double lookX, double lookZ, boolean spectator, boolean canSeeSky) {
+                          float lookYaw, float lookPitch,
+                          boolean spectator, boolean canSeeSky, Player player) {
             this.uuid = uuid; this.x = x; this.y = y; this.z = z;
-            this.lookX = lookX; this.lookZ = lookZ;
+            this.lookYaw = lookYaw; this.lookPitch = lookPitch;
             this.spectator = spectator; this.canSeeSky = canSeeSky;
+            this.world = player.getWorld();
+            this.player = player;
+            
+            double yawRad = Math.toRadians(lookYaw);
+            this.lookX = -Math.sin(yawRad) * Math.cos(Math.toRadians(lookPitch));
+            this.lookZ = Math.cos(yawRad) * Math.cos(Math.toRadians(lookPitch));
         }
     }
 }

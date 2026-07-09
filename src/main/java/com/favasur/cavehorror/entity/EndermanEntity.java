@@ -2,29 +2,40 @@ package com.favasur.cavehorror.entity;
 
 import com.favasur.cavehorror.CaveNoisePlugin;
 import com.favasur.cavehorror.entity.custom.*;
+import com.hytale.api.HytaleServer;
+import com.hytale.api.entity.Entity;
+import com.hytale.api.entity.EntityType;
+import com.hytale.api.world.Location;
+import com.hytale.api.world.Material;
+import com.hytale.api.world.Vector3f;
+import com.hytale.api.world.World;
+import com.hytale.api.entity.EntityDefinition;
+import com.hytale.api.entity.EntityCategory;
+import com.hytale.api.entity.EntityAttribute;
 
 import java.util.Random;
 
 /**
  * EndermanEntity — the core stalker entity with wired AI goal dispatch.
  * 
- * AI Goals (created in initAI()):
- * - EndermanStalkGoal: Follows player 20-30 blocks back, invisible, phasing
- * - EndermanChaseGoal: Aggressive pursuit with weeping angel freeze
- * - EndermanBreakInvisGoal: Reveals entity when player looks directly at it
- * - EndermanTargetSeesMeGoal: Detects player line-of-sight + staring
- * - EndermanTargetTooCloseGoal: Detects player proximity
+ * Wraps a Hytale native Entity. AI is managed through custom goal classes
+ * dispatched by state machine: IDLE → STALKING → CHASING → FLEEING → HUNTING.
  * 
- * State machine: IDLE → STALKING → CHASING → FLEEING → HUNTING
- * 
- * HYTALE API: Integrate with com.hytale.server.entity.Entity ECS system.
- * Register via: EntityTypeRegistry.get().register("cave_dweller", EndermanEntity::new);
+ * == HYTALE API INTEGRATION ==
+ * - Registered via EndermanEntityDefinition with EntityRegistry
+ * - Native Entity from HytaleServer.getEntityService().spawn()
+ * - Uses WorldService for block queries, AudioService for sound effects
+ * - ParticleService for mold/eye particles
  */
 public class EndermanEntity {
 
     public enum State { STALKING, CHASING, FLEEING, HUNTING, IDLE }
     
-    // ---- AI Goals (initialized in initAI()) ----
+    // Hytale entity type ID — must match the definition registration
+    public static final String ENTITY_TYPE_ID = "cavehorror:cave_dweller";
+    public static EntityType CAVE_DWELLER_TYPE;
+    
+    // AI Goals
     private EndermanStalkGoal stalkGoal;
     private EndermanChaseGoal chaseGoal;
     private EndermanBreakInvisGoal breakInvisGoal;
@@ -33,9 +44,11 @@ public class EndermanEntity {
     
     private final CaveNoisePlugin plugin;
     
-    // Position & velocity
+    // Wrapped Hytale entity
+    private Entity entity;
+    
+    // Position cache (syncs with Hytale entity position)
     private double x, y, z;
-    private double velocityX, velocityY, velocityZ;
     
     // State
     private State state = State.IDLE;
@@ -44,12 +57,6 @@ public class EndermanEntity {
     private boolean eyesVisible = false;
     private boolean aggro = false;
     private boolean spotted = false;
-    
-    // HYTALE API: These map to ECS components:
-    // - invisible → VisualComponent.setVisible(false)
-    // - eyesVisible → custom shader component
-    // - aggro → AIComponent.setBehavior(AIBehavior.AGGRESSIVE)
-    // - state → AIStateComponent.setCurrentState(State.STALKING)
     
     private String targetPlayerId;
     private int tickCount = 0;
@@ -64,8 +71,9 @@ public class EndermanEntity {
     private int moldSpreadTimer = 0;
     private int moldSpreadIndex = 0;
     
-    public EndermanEntity(CaveNoisePlugin plugin, double x, double y, double z) {
+    public EndermanEntity(CaveNoisePlugin plugin, Entity entity, double x, double y, double z) {
         this.plugin = plugin;
+        this.entity = entity;
         this.x = x; this.y = y; this.z = z;
         this.random = plugin.getRandom();
     }
@@ -86,16 +94,15 @@ public class EndermanEntity {
     
     /**
      * AI tick — dispatches to the active goal based on current state.
-     * Called from CaveNoisePlugin.serverTick() with target player data.
      */
     public void tickAI(double targetX, double targetY, double targetZ,
-                       double lookX, double lookZ, boolean playerIsSpectator,
-                       boolean playerIsLooking) {
+                       double lookX, double lookY, double lookZ,
+                       boolean playerIsSpectator, boolean playerIsLooking) {
         if (!alive || playerIsSpectator) return;
         
         // BreakInvisGoal check: if player looks at invisible entity, reveal it
         if (invisible && state == State.STALKING) {
-            if (breakInvisGoal.canUse(targetX, targetY, targetZ, lookX, lookZ)) {
+            if (breakInvisGoal.canUse(targetX, targetY, targetZ, lookX, lookY, lookZ)) {
                 breakInvisGoal.start();
                 return;
             }
@@ -104,24 +111,19 @@ public class EndermanEntity {
         // Dispatch to active goal
         switch (state) {
             case STALKING:
-                // StalkGoal handles its own transition to CHASING
                 stalkGoal.tick(targetX, targetY, targetZ, lookX, lookZ, playerIsSpectator);
                 break;
-                
             case CHASING:
                 chaseGoal.tick(targetX, targetY, targetZ, playerIsSpectator, playerIsLooking);
                 break;
-                
             case FLEEING:
                 tickFleeing(targetX, targetY, targetZ);
                 break;
-                
             case HUNTING:
                 tickHunting(targetX, targetY, targetZ);
                 break;
-                
             case IDLE:
-                // HYTALE API: Play idle animation, wait for targeting goal
+                // Wait for targeting goal to trigger transition
                 break;
         }
     }
@@ -129,10 +131,7 @@ public class EndermanEntity {
     /**
      * Physics tick — applies gravity, velocity, and ground collision.
      * Called separately from AI tick so physics runs even if AI is paused.
-     * 
-     * HYTALE API: This can be replaced by Hytale's own physics system.
-     * If the entity is registered with ECS physics components,
-     * Hytale handles gravity and collision automatically.
+     * Uses Hytale's built-in physics components when available.
      */
     public void tickPhysics() {
         if (!alive) return;
@@ -140,49 +139,44 @@ public class EndermanEntity {
         
         // Apply gravity if visible and not phasing
         if (!invisible) {
-            velocityY -= 0.02; // Gravity acceleration
-            // HYTALE API: Use PhysicsComponent.setGravity(Vector3f(0, -0.02, 0));
+            // Use Hytale physics component if wrapped entity exists
+            if (entity != null) {
+                entity.getPhysicsComponent().setGravity(new Vector3f(0, -0.02f, 0));
+            }
         }
         
-        // Apply velocity
-        x += velocityX;
-        y += velocityY;
-        z += velocityZ;
+        // Sync position with Hytale entity
+        if (entity != null) {
+            Location loc = entity.getLocation();
+            this.x = loc.getX();
+            this.y = loc.getY();
+            this.z = loc.getZ();
+        }
         
-        // HYTALE API: Ground collision via world height
-        // World world = Server.get().getWorld();
-        // int bx = (int)x, bz = (int)z;
-        // for (int by = (int)y; by > 5; by--) {
-        //     Block block = world.getBlockAt(bx, by, bz);
-        //     if (block.isSolid()) {
-        //         y = by + 1; velocityY = 0; break;
-        //     }
-        // }
-        
-        // HYTALE API: Wall collision for noPhysics phasing
-        // if (invisible) {
-        //     entity.getComponent(CollisionComponent.class).setEnabled(false);
-        // } else {
-        //     entity.getComponent(CollisionComponent.class).setEnabled(true);
-        // }
+        // Update visibility state on the wrapped entity
+        if (entity != null) {
+            entity.setInvisible(invisible);
+        }
         
         // Mold particle spreading after wall emergence
         if (moldSpreadTimer > 0) {
             tickMoldParticles();
         }
         
-        // Auto-despawn after 1 hour
+        // Auto-despawn after 1 hour (72000 ticks)
         if (tickCount > 72000) despawn();
     }
     
     // ---- BEHAVIOR HELPERS ----
     
     private void tickFleeing(double tx, double ty, double tz) {
-        // Run away from target player
         double dx = x - tx, dz = z - tz;
         double len = Math.sqrt(dx * dx + dz * dz);
         if (len > 0) {
-            setVelocity(dx / len * 1.2, 0, dz / len * 1.2);
+            if (entity != null) {
+                entity.setVelocity(new Vector3f(
+                    (float)(dx / len * 1.2), 0, (float)(dz / len * 1.2)));
+            }
         }
         // After 5 seconds, teleport away and return to stalking
         if (tickCount % 100 == 0) {
@@ -194,66 +188,66 @@ public class EndermanEntity {
     
     /**
      * Hunting mode — emerge from a wall with mold particle effects.
-     * Triggered by StalkGoal corridor detection.
-     * Ported from Minecraft EndermanEntity.emergeFromWall().
      */
     private void tickHunting(double tx, double ty, double tz) {
         if (!hasWallTarget) {
-            // No wall target — return to stalking
             setState(State.STALKING);
             stalkGoal.start();
             return;
         }
         
-        // Teleport to the wall position and emerge
         emergenceFromWall(targetWallX, targetWallY, targetWallZ, tx, tz);
         
         hasWallTarget = false;
-        
-        // After emergence, switch to chase mode (player sees us)
         setInvisible(false);
         setAggro(true);
         setState(State.CHASING);
         
-        // HYTALE API: Play emergence sound
-        // SoundManager.get().playSound("cavehorror:emergence", 
-        //     new Vector3f((float)x, (float)y, (float)z), 1.0f, 0.5f);
+        // Play emergence sound
+        HytaleServer.getAudioService().playSound(
+            null, "cavehorror:emergence",
+            new Vector3f((float)x, (float)y, (float)z), 1.0f, 0.5f
+        );
     }
     
     /**
      * Emerge from a wall with mold particle spreading.
-     * Spawns black particles on nearby wall blocks to create a "mold" effect.
-     * Ported from Minecraft EndermanEntity.emergeFromWall().
+     * Spawns black particles on nearby wall blocks to create a mold effect.
      */
     private void emergenceFromWall(double wallX, double wallY, double wallZ,
                                      double playerX, double playerZ) {
-        // 1. Teleport to the wall position
         teleportTo(wallX + 0.5, wallY, wallZ + 0.5);
         
-        // 2. Face the player
+        // Face the player
         double dx = playerX - wallX, dz = playerZ - wallZ;
-        // HYTALE API: setYaw((float)Math.toDegrees(Math.atan2(-dx, dz)));
+        float yaw = (float)Math.toDegrees(Math.atan2(-dx, dz));
+        if (entity != null) {
+            entity.setYaw(yaw);
+        }
         
-        // 3. Determine mold area — find nearby solid blocks for particle placement
+        // Determine mold area
         moldParticlePositions.clear();
         moldSpreadIndex = 0;
         int moldHeight = 3;
+        World world = plugin.getServer().getWorld("overworld");
+        if (world == null) return;
         
         for (int dy = 0; dy < moldHeight; dy++) {
             int checkY = (int)wallY + dy;
             
             // Check block at wall position
-            // HYTALE API: if (world.getBlockAt((int)wallX, checkY, (int)wallZ).isSolid()) {
-            //     moldParticlePositions.add(new double[]{wallX + 0.5, checkY + 0.5, wallZ + 0.5});
-            // }
+            if (world.getBlockAt((int)wallX, checkY, (int)wallZ).getType().isSolid()) {
+                moldParticlePositions.add(new double[]{wallX + 0.5, checkY + 0.5, wallZ + 0.5});
+            }
             
-            // Check adjacent blocks (same Y) for organic mold coverage
+            // Check adjacent blocks for organic mold coverage
             int[][] neighbors = {{-1,0},{1,0},{0,-1},{0,1}};
             for (int[] n : neighbors) {
                 if (random.nextFloat() < 0.4f) {
-                    // HYTALE API: if (world.getBlockAt((int)wallX + n[0], checkY, (int)wallZ + n[1]).isSolid()) {
-                    //     moldParticlePositions.add(new double[]{wallX + 0.5 + n[0], checkY + 0.5, wallZ + 0.5 + n[1]});
-                    // }
+                    if (world.getBlockAt((int)wallX + n[0], checkY, (int)wallZ + n[1]).getType().isSolid()) {
+                        moldParticlePositions.add(new double[]{
+                            wallX + 0.5 + n[0], checkY + 0.5, wallZ + 0.5 + n[1]});
+                    }
                 }
             }
         }
@@ -272,14 +266,19 @@ public class EndermanEntity {
         if (moldSpreadTimer % 2 == 0 && moldSpreadIndex < moldParticlePositions.size()) {
             double[] pos = moldParticlePositions.get(moldSpreadIndex++);
             
-            // HYTALE API: Spawn black dust particles at mold positions
-            // for (int p = 0; p < 4; p++) {
-            //     ParticleAPI.spawn("cavehorror:mold_dust", 
-            //         pos[0] + (random.nextDouble() - 0.5) * 0.8,
-            //         pos[1] + (random.nextDouble() - 0.5) * 0.8,
-            //         pos[2] + (random.nextDouble() - 0.5) * 0.8,
-            //         new Vector3f(0.02f, 0.02f, 0.02f));
-            // }
+            // Spawn black dust particles at mold positions
+            for (int p = 0; p < 4; p++) {
+                HytaleServer.getParticleService().spawnParticle(
+                    "cavehorror:mold_dust",
+                    new Vector3f(
+                        (float)(pos[0] + (random.nextDouble() - 0.5) * 0.8),
+                        (float)(pos[1] + (random.nextDouble() - 0.5) * 0.8),
+                        (float)(pos[2] + (random.nextDouble() - 0.5) * 0.8)
+                    ),
+                    new Vector3f(0.02f, 0.02f, 0.02f),
+                    0
+                );
+            }
         }
         
         if (moldSpreadTimer <= 0) {
@@ -290,48 +289,11 @@ public class EndermanEntity {
     
     // ---- POSITION HELPERS ----
     
-    public static double[] generateSpawnPosition(
-            double playerX, double playerY, double playerZ,
-            double lookX, double lookZ) {
-        double dirX = -lookX, dirZ = -lookZ;
-        double len = Math.sqrt(dirX * dirX + dirZ * dirZ);
-        if (len > 0) { dirX /= len; dirZ /= len; }
-        
-        double angleVariation = (Math.random() - 0.5) * 0.8;
-        double cos = Math.cos(angleVariation), sin = Math.sin(angleVariation);
-        double finalDirX = dirX * cos - dirZ * sin;
-        double finalDirZ = dirX * sin + dirZ * cos;
-        
-        double distance = 20.0 + Math.random() * 20.0;
-        double spawnX = playerX + finalDirX * distance;
-        double spawnZ = playerZ + finalDirZ * distance;
-        double spawnY = Math.min(playerY + 5.0, 40.0);
-        
-        // HYTALE API: Scan downward for solid ground
-        // World world = Server.get().getWorld();
-        // for (int by = (int)spawnY; by > 5; by--) {
-        //     if (world.getBlockAt((int)spawnX, by - 1, (int)spawnZ).isSolid()) {
-        //         spawnY = by; break;
-        //     }
-        // }
-        
-        return new double[]{spawnX, Math.min(spawnY, 35.0), spawnZ};
-    }
-    
-    /**
-     * Set the wall emergence target position (called by StalkGoal corridor detection).
-     */
-    public void setTargetPosition(double tx, double ty, double tz) {
-        this.targetWallX = tx;
-        this.targetWallY = ty;
-        this.targetWallZ = tz;
-        this.hasWallTarget = true;
-    }
-    
     public void teleportTo(double tx, double ty, double tz) {
         this.x = tx; this.y = ty; this.z = tz;
-        this.velocityX = 0; this.velocityY = 0; this.velocityZ = 0;
-        // HYTALE API: entity.getComponent(PositionComponent.class).setPosition(tx, ty, tz);
+        if (entity != null) {
+            entity.teleport(new Location(entity.getWorld(), tx, ty, tz));
+        }
     }
     
     // ---- STATE ACCESSORS ----
@@ -343,7 +305,10 @@ public class EndermanEntity {
     public void setAlive(boolean alive) { this.alive = alive; }
     
     public boolean isInvisible() { return invisible; }
-    public void setInvisible(boolean invisible) { this.invisible = invisible; }
+    public void setInvisible(boolean invisible) { 
+        this.invisible = invisible;
+        if (entity != null) entity.setInvisible(invisible);
+    }
     
     public boolean areEyesVisible() { return eyesVisible; }
     public void setEyesVisible(boolean visible) { this.eyesVisible = visible; }
@@ -361,18 +326,14 @@ public class EndermanEntity {
     public double getY() { return y; }
     public double getZ() { return z; }
     
-    public double getVelocityX() { return velocityX; }
-    public double getVelocityY() { return velocityY; }
-    public double getVelocityZ() { return velocityZ; }
-    
     public void setPosition(double x, double y, double z) {
         this.x = x; this.y = y; this.z = z;
     }
-    public void setVelocity(double vx, double vy, double vz) {
-        this.velocityX = vx; this.velocityY = vy; this.velocityZ = vz;
-    }
     
-    // ---- AI GOAL ACCESSORS (used by CaveNoisePlugin) ----
+    public Entity getEntity() { return entity; }
+    public void setEntity(Entity entity) { this.entity = entity; }
+    
+    // ---- AI GOAL ACCESSORS ----
     
     public EndermanStalkGoal getStalkGoal() { return stalkGoal; }
     public EndermanChaseGoal getChaseGoal() { return chaseGoal; }
@@ -380,14 +341,12 @@ public class EndermanEntity {
     public EndermanTargetSeesMeGoal getTargetSeesMeGoal() { return targetSeesMeGoal; }
     public EndermanTargetTooCloseGoal getTargetTooCloseGoal() { return targetTooCloseGoal; }
     
-    public void setPersistent(boolean persistent) {
-        // HYTALE API: entity.getComponent(PersistenceComponent.class).setPersistent(persistent);
-    }
-    
     public void despawn() {
         this.alive = false;
+        if (entity != null) {
+            entity.remove();
+        }
         plugin.getEndermanRegistry().untrack(this);
-        // HYTALE API: Server.get().getWorld().removeEntity(this);
     }
     
     public double distanceTo(double px, double py, double pz) {
@@ -396,4 +355,46 @@ public class EndermanEntity {
     }
     
     public CaveNoisePlugin getPlugin() { return plugin; }
+    
+    /**
+     * EndermanEntityDefinition — registered with EntityRegistry during onEnable().
+     * Defines entity attributes, type ID, and spawn settings.
+     */
+    public static class EndermanEntityDefinition implements com.hytale.api.entity.EntityDefinition {
+        private final CaveNoisePlugin plugin;
+        
+        public EndermanEntityDefinition(CaveNoisePlugin plugin) {
+            this.plugin = plugin;
+        }
+        
+        @Override
+        public String getId() {
+            return ENTITY_TYPE_ID;
+        }
+        
+        @Override
+        public String getName() {
+            return "Cave Dweller";
+        }
+        
+        @Override
+        public EntityCategory getCategory() {
+            return EntityCategory.MONSTER;
+        }
+        
+        @Override
+        public EntityAttribute getAttributes() {
+            return EntityAttribute.builder()
+                .maxHealth(65.0)
+                .movementSpeed(0.35)
+                .attackDamage(6.0)
+                .followRange(200.0)
+                .build();
+        }
+        
+        @Override
+        public boolean isEnabled() {
+            return true;
+        }
+    }
 }

@@ -1,0 +1,215 @@
+{
+  "behavior": "cave_dweller_stalk",
+  "version": 1,
+  "description": "Enderman stalking behavior — follows player invisibly from 20-30 blocks, phases through walls, triggers chase on stare/proximity. Designed for Hytale's visual scripting node system.",
+
+  "states": {
+    "idle": {
+      "entry_node": "idle_entry",
+      "tick_node": "idle_tick",
+      "transitions": [
+        { "to": "stalking", "condition": "player_in_range > 200 && player_underground" }
+      ]
+    },
+    "stalking": {
+      "entry_node": "stalk_entry",
+      "tick_node": "stalk_tick",
+      "description": "Follow player at 20-30 blocks, invisible, phasing through walls",
+      "transitions": [
+        { "to": "chasing", "condition": "player_stare_ticks >= 200" },
+        { "to": "chasing", "condition": "distance_to_player < 15" },
+        { "to": "chasing", "condition": "player_line_of_sight && player_looking" },
+        { "to": "hunting", "condition": "player_running_away > 12000 && corridor_detected" },
+        { "to": "idle", "condition": "player_too_far > 300" }
+      ]
+    },
+    "chasing": {
+      "entry_node": "chase_entry",
+      "tick_node": "chase_tick",
+      "description": "Aggressive pursuit with weeping angel freeze (stops when looked at)",
+      "transitions": [
+        { "to": "stalking", "condition": "player_out_of_sight > 200" },
+        { "to": "fleeing", "condition": "health < 20%" },
+        { "to": "idle", "condition": "player_too_far > 500" }
+      ]
+    },
+    "fleeing": {
+      "entry_node": "flee_entry",
+      "tick_node": "flee_tick",
+      "description": "Run away and teleport back to stalking",
+      "transitions": [
+        { "to": "stalking", "condition": "flee_time > 100" },
+        { "to": "idle", "condition": "player_gone" }
+      ]
+    },
+    "hunting": {
+      "entry_node": "hunt_entry",
+      "tick_node": "hunt_tick",
+      "description": "Wall emergence ambush — teleport to corridor wall and emerge",
+      "transitions": [
+        { "to": "chasing", "condition": "emerged_from_wall" },
+        { "to": "stalking", "condition": "ambush_failed" }
+      ]
+    }
+  },
+
+  "variables": {
+    "player_stare_ticks": { "type": "int", "default": 0 },
+    "run_away_stalk_timer": { "type": "int", "default": 0 },
+    "phase_cooldown": { "type": "int", "default": 0 },
+    "steal_cooldown": { "type": "int", "default": 1200 },
+    "structure_cooldown": { "type": "int", "default": 24000 },
+    "ambush_cooldown": { "type": "int", "default": 0 },
+    "ready_to_ambush": { "type": "bool", "default": false },
+    "record_13_timer": { "type": "int", "default": -1 },
+    "eyes_visible": { "type": "bool", "default": false }
+  },
+
+  "nodes": {
+    "stalk_entry": {
+      "type": "sequence",
+      "children": ["set_invisible", "play_stalk_animation"]
+    },
+    "stalk_tick": {
+      "type": "selector",
+      "children": [
+        "distance_maintenance",
+        "stare_tracking",
+        "wall_phasing",
+        "block_stealing",
+        "structure_building",
+        "ambient_sounds",
+        "corridor_detection"
+      ]
+    },
+    "distance_maintenance": {
+      "type": "condition",
+      "description": "Tug-of-war: keep 20-30 blocks from player",
+      "if_close": {
+        "condition": "distance_to_player < 20",
+        "then": "move_away_from_player"
+      },
+      "if_far": {
+        "condition": "distance_to_player > 30",
+        "then": "move_toward_player"
+      },
+      "if_ok": {
+        "condition": "distance_to_player >= 20 && distance_to_player <= 30",
+        "then": "hold_position"
+      }
+    },
+    "stare_tracking": {
+      "type": "timer",
+      "description": "Increment stare timer when player looks, decrement when not",
+      "vars": {
+        "if_looking": "player_stare_ticks++",
+        "if_not_looking": "player_stare_ticks = max(0, player_stare_ticks - 5)"
+      }
+    },
+    "wall_phasing": {
+      "type": "cooldown_action",
+      "cooldown_var": "phase_cooldown",
+      "cooldown_value": 60,
+      "description": "Teleport through walls when path is blocked",
+      "condition": "navigation_stuck || horizontal_collision",
+      "action": "teleport_toward_player(40%)"
+    },
+    "block_stealing": {
+      "type": "cooldown_action",
+      "cooldown_var": "steal_cooldown",
+      "cooldown_value": 1200,
+      "description": "Steal doors, glass panes, fence gates near player",
+      "action": "steal_block_near_player(radius=5)"
+    },
+    "structure_building": {
+      "type": "cooldown_action",
+      "cooldown_var": "structure_cooldown",
+      "cooldown_value": 24000,
+      "description": "Build sand pillars, pyramids, or mossy dungeons",
+      "action": "build_structure_near_player(range=25)"
+    },
+    "corridor_detection": {
+      "type": "scan",
+      "description": "Scan 20-30 blocks ahead for corridor walls for ambush",
+      "range": "20-30 blocks",
+      "side_scan": "2-4 blocks left/right",
+      "height_scan": "1-3 blocks up",
+      "on_corridor_found": {
+        "set": "ready_to_ambush = true",
+        "set_target": "nearest_wall_position"
+      }
+    },
+    "chase_entry": {
+      "type": "sequence",
+      "children": ["set_visible", "play_chase_sound", "set_aggro_true", "reveal_eyes"]
+    },
+    "chase_tick": {
+      "type": "selector",
+      "children": [
+        "weeping_angel_freeze",
+        "attack_player",
+        "chase_movement",
+        "destroy_torches"
+      ]
+    },
+    "weeping_angel_freeze": {
+      "type": "condition",
+      "description": "Freeze when player looks at entity from >4 blocks",
+      "condition": "player_looking && distance_to_player > 4",
+      "then": "stop_movement && set_aggro_false"
+    },
+    "attack_player": {
+      "type": "cooldown_action",
+      "cooldown_value": 20,
+      "description": "Melee attack with shield break",
+      "condition": "distance_to_player < 3",
+      "action": "deal_damage(6.0, shield_break=true)"
+    },
+    "destroy_torches": {
+      "type": "area_effect",
+      "description": "Destroy torches in 1-block radius when moving",
+      "radius": 1,
+      "block_filter": ["torch", "wall_torch", "soul_torch", "redstone_torch"]
+    },
+    "hunt_entry": {
+      "type": "sequence",
+      "children": ["teleport_to_wall", "emerge_animation", "spawn_mold_particles", "play_emergence_sound"]
+    },
+    "flee_entry": {
+      "type": "sequence",
+      "children": ["run_away_from_player", "teleport_away", "set_invisible", "transition_to_stalking"]
+    }
+  },
+
+  "sensors": {
+    "player_in_range": { "type": "proximity", "range": 200 },
+    "distance_to_player": { "type": "distance", "target": "player" },
+    "player_underground": { "type": "environment", "check": "y < 40 && !can_see_sky" },
+    "player_line_of_sight": { "type": "raycast", "from": "player_eyes", "to": "entity" },
+    "player_looking": { "type": "fov_check", "fov": 70, "precision": 0.819 },
+    "player_running_away": { "type": "movement_track", "direction": "away_from_entity" },
+    "corridor_detected": { "type": "block_scan", "shape": "corridor" },
+    "navigation_stuck": { "type": "navigation", "check": "path_blocked" },
+    "horizontal_collision": { "type": "physics", "check": "touching_wall" }
+  },
+
+  "effects": {
+    "set_invisible": { "type": "visual", "property": "visible", "value": false },
+    "set_visible": { "type": "visual", "property": "visible", "value": true },
+    "reveal_eyes": {
+      "type": "visual",
+      "property": "eyes_visible",
+      "value": true,
+      "condition": "ambient_brightness == 0"
+    },
+    "spawn_mold_particles": {
+      "type": "particle",
+      "effect": "mold_dust",
+      "color": [0.02, 0.02, 0.02],
+      "density": 4,
+      "duration_ticks": "mold_positions_count * 2"
+    },
+    "play_emergence_sound": { "type": "sound", "sound_id": "cavehorror:emergence", "volume": 1.0, "pitch": 0.5 },
+    "play_chase_sound": { "type": "sound", "sound_id": "cavehorror:enderman_scream", "volume": 3.0, "pitch": 1.0 }
+  }
+}

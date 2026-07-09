@@ -1,30 +1,25 @@
 package com.favasur.cavehorror.torch;
 
 import com.favasur.cavehorror.CaveNoisePlugin;
+import com.hytale.api.HytaleServer;
+import com.hytale.api.world.Material;
+import com.hytale.api.world.World;
 
 import java.util.Random;
 
 /**
- * TorchBurnoutSystem — manages torch extinguishing mechanics.
+ * TorchBurnoutSystem — extinguishes torches near players when the enderman is close.
  * 
- * When the enderman entity is near a player deep underground (30+ blocks below surface),
+ * When an entity is near a player deep underground (30+ blocks below surface),
  * torches within a 20-40 block radius are randomly extinguished.
  * 
- * Also handles the "Lit Torch" item — a torch that stays lit even when placed
- * in the entity's extinguishing aura, giving players a way to fight back.
- * 
- * Ported from Minecraft:
- * - LitTorch.java (custom torch block)
- * - ModTorchConfig.java (configuration)
- * - EndermanEntity.extinguishNearbyTorches()
- * - EndermanChaseGoal torch destruction
+ * Uses Hytale WorldService for block scanning and modification.
  */
 public class TorchBurnoutSystem {
 
     private final CaveNoisePlugin plugin;
     private final Random random;
     
-    // Config values with defaults
     private int extinguishRadius = 20;
     private int extinguishTickInterval = 10;
     private float extinguishChance = 0.3f;
@@ -36,21 +31,20 @@ public class TorchBurnoutSystem {
     
     /**
      * Extinguish torches near a given position.
-     * Called every 10 ticks from the entity's tick() method.
+     * Only activates when player is 30+ blocks below surface.
      * 
      * @param cx Center X of the extinguishing aura
      * @param cy Center Y
      * @param cz Center Z
-     * @param playerDepth How far below the surface the player is
+     * @param playerDepth How far below the surface
      */
     public void extinguishNearby(double cx, double cy, double cz, int playerDepth) {
-        // Only extinguish when player is 30+ blocks below surface
         if (playerDepth < 30) return;
         
-        // Vary the radius each time for organic feel
         int effectiveRadius = extinguishRadius + random.nextInt(extinguishRadius);
+        World world = plugin.getServer().getWorld("overworld");
+        if (world == null) return;
         
-        // Hytale API: Scan blocks in radius
         for (int dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
             for (int dz = -effectiveRadius; dz <= effectiveRadius; dz++) {
                 if (dx * dx + dz * dz > effectiveRadius * effectiveRadius) continue;
@@ -59,31 +53,40 @@ public class TorchBurnoutSystem {
                 int bz = (int)cz + dz;
                 int by = (int)cy;
                 
-                // Check block at position
-                // Hytale API: if (block is torch or wall_torch) destroy
+                // Check block at entity Y level
+                if (isExtinguishableTorch(world.getBlockAt(bx, by, bz).getType())) {
+                    if (random.nextFloat() < extinguishChance) {
+                        world.setBlock(bx, by, bz, Material.AIR);
+                        HytaleServer.getAudioService().playSound(
+                            null, "cavehorror:torch_snuff",
+                            new com.hytale.api.world.Vector3f(bx, by, bz), 1.0f, 1.0f
+                        );
+                    }
+                }
                 
-                // Check block at y-1
-                // Hytale API: if (block is torch) destroy
+                // Also check block at Y-1 (wall torches attached to floor)
+                if (isExtinguishableTorch(world.getBlockAt(bx, by - 1, bz).getType())) {
+                    if (random.nextFloat() < extinguishChance) {
+                        world.setBlock(bx, by - 1, bz, Material.AIR);
+                    }
+                }
             }
         }
     }
     
     /**
-     * Check if a torch should remain lit (Lit Torch items are immune).
+     * Check if a block type should be extinguished by the entity's aura.
+     * Players can craft "Lit Torches" that are immune.
      */
-    public boolean isTorchImmune(int bx, int by, int bz) {
-        // Hytale API: Check if block at position is a "lit_torch"
-        // If so, it never extinguishes by the entity's aura
-        // (Player-crafted lit torches are a counter-measure)
-        return false; // Placeholder
+    private boolean isExtinguishableTorch(Material type) {
+        String name = type.name().toLowerCase();
+        return name.contains("torch") || name.contains("lantern");
     }
     
     public int getExtinguishRadius() { return extinguishRadius; }
     public void setExtinguishRadius(int radius) { this.extinguishRadius = radius; }
-    
     public int getExtinguishTickInterval() { return extinguishTickInterval; }
     public void setExtinguishTickInterval(int interval) { this.extinguishTickInterval = interval; }
-    
     public float getExtinguishChance() { return extinguishChance; }
     public void setExtinguishChance(float chance) { this.extinguishChance = chance; }
 }

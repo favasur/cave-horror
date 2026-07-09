@@ -3,6 +3,11 @@ package com.favasur.cavehorror.entity.custom;
 import com.favasur.cavehorror.CaveNoisePlugin;
 import com.favasur.cavehorror.entity.EndermanEntity;
 import com.favasur.cavehorror.entity.EndermanEntity.State;
+import com.hytale.api.HytaleServer;
+import com.hytale.api.world.Block;
+import com.hytale.api.world.Material;
+import com.hytale.api.world.Vector3f;
+import com.hytale.api.world.World;
 
 import java.util.Random;
 
@@ -11,7 +16,8 @@ import java.util.Random;
  * Phases through walls, steals blocks, builds structures.
  * Transitions to ChaseGoal when stared at 10s or player gets within 15 blocks.
  * 
- * Ported from Minecraft EndermanStalkGoal.java
+ * Uses Hytale WorldService for block queries (corridor detection, block stealing)
+ * and AudioService for ambient sounds.
  */
 public class EndermanStalkGoal {
     
@@ -19,10 +25,8 @@ public class EndermanStalkGoal {
     private final CaveNoisePlugin plugin;
     private final Random random;
     
-    // Speed modifier for movement
     private final double speedModifier = 0.5;
     
-    // Distance parameters
     private static final double MIN_STALK_DISTANCE = 20.0;
     private static final double MAX_STALK_DISTANCE = 30.0;
     private static final double CHASE_TRIGGER_DISTANCE = 15.0;
@@ -40,10 +44,9 @@ public class EndermanStalkGoal {
     private int runAwayStalkTimer = 0;
     private boolean readyToAmbush = false;
     private int ambushCooldown = 0;
-    private static final int RUNAWAY_STALK_TIME = 12000;   // 10 min tracking before ambush
-    private static final int AMBUSH_COOLDOWN_TICKS = 100;   // 5 sec between ambushes
+    private static final int RUNAWAY_STALK_TIME = 12000;
+    private static final int AMBUSH_COOLDOWN_TICKS = 100;
     
-    // Block coordinates for wall emergence
     private static class WallPos {
         final int x, y, z;
         WallPos(int x, int y, int z) { this.x = x; this.y = y; this.z = z; }
@@ -74,9 +77,6 @@ public class EndermanStalkGoal {
     
     /**
      * Main tick for stalking behavior.
-     * @param targetX, targetY, targetZ Player's position
-     * @param lookX, lookZ Player's look direction (normalized)
-     * @param playerIsSpectator Whether player is spectating
      */
     public void tick(double targetX, double targetY, double targetZ,
                      double lookX, double lookZ, boolean playerIsSpectator) {
@@ -88,22 +88,22 @@ public class EndermanStalkGoal {
         
         // === DISTANCE MAINTENANCE (tug-of-war: 20-30 blocks) ===
         if (distToPlayer < MIN_STALK_DISTANCE) {
-            // Back away
             double awayX = enderman.getX() - targetX;
             double awayZ = enderman.getZ() - targetZ;
             double len = Math.sqrt(awayX * awayX + awayZ * awayZ);
             if (len > 0) { awayX /= len; awayZ /= len; }
             enderman.setVelocity(awayX * speedModifier, 0, awayZ * speedModifier);
+            updateEntityVelocity(awayX * speedModifier, 0, awayZ * speedModifier);
         } else if (distToPlayer > MAX_STALK_DISTANCE) {
-            // Move closer
             double towardX = targetX - enderman.getX();
             double towardZ = targetZ - enderman.getZ();
             double len = Math.sqrt(towardX * towardX + towardZ * towardZ);
             if (len > 0) { towardX /= len; towardZ /= len; }
             enderman.setVelocity(towardX * speedModifier, 0, towardZ * speedModifier);
+            updateEntityVelocity(towardX * speedModifier, 0, towardZ * speedModifier);
         } else {
-            // Hold position
             enderman.setVelocity(0, enderman.getVelocityY(), 0);
+            updateEntityVelocity(0, enderman.getVelocityY(), 0);
         }
         
         // === STARE TRACKING ===
@@ -122,8 +122,11 @@ public class EndermanStalkGoal {
         // === WALL PHASING (teleport when stuck) ===
         phaseCooldown--;
         if (phaseCooldown <= 0 && distToPlayer > 10.0) {
-            // HYTALE API: Check navigation state — if path blocked, teleport closer
+            // Check navigation state via collision component
             boolean pathBlocked = false;
+            if (enderman.getEntity() != null) {
+                pathBlocked = enderman.getEntity().getPhysicsComponent().isCollidingHorizontally();
+            }
             if (pathBlocked) {
                 double ratio = 0.4;
                 double tx = enderman.getX() + (targetX - enderman.getX()) * ratio;
@@ -135,35 +138,32 @@ public class EndermanStalkGoal {
             }
         }
         
-        // === BLOCK STEALING ===
+        // === BLOCK STEALING (doors, glass panes, fence gates) ===
         stealCooldown--;
         if (stealCooldown <= 0) {
-            // HYTALE API: Find and break a stealable block (doors, glass panes, etc.)
+            stealBlockNearPlayer(targetX, targetY, targetZ);
             stealCooldown = 1200 + random.nextInt(600);
         }
         
         // === STRUCTURE BUILDING ===
         structureCooldown--;
         if (structureCooldown <= 0) {
-            // HYTALE API: Build a small structure (pillar, pyramid, dungeon)
+            buildStructureNearPlayer(targetX, targetY, targetZ);
             structureCooldown = 24000 + random.nextInt(12000);
         }
         
         // === RUN-AWAY STALK TIMER & CORRIDOR AMBUSH ===
-        // Ported from Minecraft EndermanStalkGoal corridor detection logic
         if (hasPrevPlayerPos) {
             double playerDx = targetX - prevPlayerX;
             double playerDz = targetZ - prevPlayerZ;
             double playerSpeed = Math.sqrt(playerDx * playerDx + playerDz * playerDz);
             
-            // Track player running away (moving away from entity)
             double toEntityX = enderman.getX() - targetX;
             double toEntityZ = enderman.getZ() - targetZ;
             double toEntityLen = Math.sqrt(toEntityX * toEntityX + toEntityZ * toEntityZ);
             
             boolean isRunningAway = distToPlayer > 20.0 && playerSpeed > 0.18;
             if (isRunningAway) {
-                // Check if player is moving away from entity
                 double dot = (toEntityX / toEntityLen) * (playerDx / playerSpeed) 
                            + (toEntityZ / toEntityLen) * (playerDz / playerSpeed);
                 if (dot > 0.25) {
@@ -175,14 +175,12 @@ public class EndermanStalkGoal {
                 runAwayStalkTimer = Math.max(0, runAwayStalkTimer - 100);
             }
             
-            // Check if ready to ambush (10 min running + failing to keep up)
             boolean failingToKeepUp = distToPlayer > 30.0;
             if (runAwayStalkTimer >= RUNAWAY_STALK_TIME && failingToKeepUp && !readyToAmbush) {
                 readyToAmbush = true;
                 ambushCooldown = 20;
             }
             
-            // Corridor ambush: find walls ahead of player and emerge
             if (readyToAmbush) {
                 ambushCooldown--;
                 if (ambushCooldown <= 0) {
@@ -190,7 +188,6 @@ public class EndermanStalkGoal {
                         playerDx, playerDz, playerSpeed);
                     
                     if (selectedWall != null && distToPlayer > 20.0) {
-                        // Transition to HUNTING state — wall emergence
                         enderman.setState(EndermanEntity.State.HUNTING);
                         enderman.setTargetPosition(selectedWall.x, selectedWall.y, selectedWall.z);
                         
@@ -208,7 +205,6 @@ public class EndermanStalkGoal {
             }
         }
         
-        // Record player position for next tick
         this.prevPlayerX = targetX;
         this.prevPlayerZ = targetZ;
         this.hasPrevPlayerPos = true;
@@ -217,29 +213,108 @@ public class EndermanStalkGoal {
         if (random.nextInt(200) == 0) {
             double sx = targetX + (random.nextDouble() - 0.5) * 50;
             double sz = targetZ + (random.nextDouble() - 0.5) * 50;
-            // HYTALE API: HytaleSoundAPI.playSound("cavehorror:enderman_ambient", sx, targetY, sz, 2.0f);
+            HytaleServer.getAudioService().playSound(
+                null, "cavehorror:enderman_ambient",
+                new Vector3f((float)sx, (float)targetY, (float)sz), 2.0f, 1.0f
+            );
         }
     }
     
     /**
-     * Detect if the player is in a corridor by checking 20-30 blocks ahead
-     * for walls on both sides. Ported from Minecraft EndermanStalkGoal.
-     * 
-     * @return WallPos to emerge from, or null if corridor not found
+     * Steal a block (door, glass pane, fence gate, or iron bars) near the player.
+     */
+    private void stealBlockNearPlayer(double px, double py, double pz) {
+        World world = plugin.getServer().getWorld("overworld");
+        if (world == null) return;
+        
+        // Scan blocks in 5-block radius of player
+        for (int dx = -5; dx <= 5; dx++) {
+            for (int dz = -5; dz <= 5; dz++) {
+                for (int dy = -2; dy <= 2; dy++) {
+                    int bx = (int)px + dx, by = (int)py + dy, bz = (int)pz + dz;
+                    Block block = world.getBlockAt(bx, by, bz);
+                    Material type = block.getType();
+                    
+                    // Only steal specific structural blocks
+                    if (isStealableBlock(type)) {
+                        // Remove the block (steal it)
+                        world.setBlock(bx, by, bz, Material.AIR);
+                        CaveNoisePlugin.getLogger().debug("Stole block at ({}, {}, {})", bx, by, bz);
+                        return; // One steal per cooldown cycle
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Build a small structure near the player (sand pillar, pyramid, or mossy dungeon).
+     */
+    private void buildStructureNearPlayer(double px, double py, double pz) {
+        World world = plugin.getServer().getWorld("overworld");
+        if (world == null) return;
+        
+        int bx = (int)px + random.nextInt(20) - 10;
+        int bz = (int)pz + random.nextInt(20) - 10;
+        
+        // Find ground level
+        int by = world.getHighestBlockYAt(bx, bz);
+        if (by < 5) return;
+        
+        int structureType = random.nextInt(3);
+        switch (structureType) {
+            case 0: // Sand pillar
+                for (int h = 0; h < 3 + random.nextInt(3); h++) {
+                    world.setBlock(bx, by + h, bz, Material.SAND);
+                }
+                break;
+            case 1: // Small pyramid (cobblestone)
+                for (int layer = 0; layer < 3; layer++) {
+                    int size = 3 - layer;
+                    for (int sx = -size; sx <= size; sx++) {
+                        for (int sz = -size; sz <= size; sz++) {
+                            world.setBlock(bx + sx, by + layer, bz + sz, Material.COBBLESTONE);
+                        }
+                    }
+                }
+                break;
+            case 2: // Mossy dungeon corner
+                world.setBlock(bx, by, bz, Material.MOSSY_COBBLESTONE);
+                world.setBlock(bx + 1, by, bz, Material.COBBLESTONE);
+                world.setBlock(bx, by, bz + 1, Material.COBBLESTONE);
+                world.setBlock(bx, by + 1, bz, Material.MOSSY_COBBLESTONE);
+                break;
+        }
+    }
+    
+    /**
+     * Check if a block type is stealable (doors, glass panes, fence gates, iron bars).
+     */
+    private boolean isStealableBlock(Material type) {
+        String name = type.name().toLowerCase();
+        return name.endsWith("_door") 
+            || name.endsWith("_glass_pane") 
+            || name.endsWith("_fence_gate")
+            || name.equals("iron_bars")
+            || name.equals("glass");
+    }
+    
+    /**
+     * Detect if the player is in a corridor by scanning 20-30 blocks ahead.
      */
     private WallPos detectCorridorAhead(double targetX, double targetY, double targetZ,
                                           double playerDx, double playerDz, double playerSpeed) {
         if (playerSpeed < 0.01) return null;
         
-        // Normalize player movement direction
+        World world = plugin.getServer().getWorld("overworld");
+        if (world == null) return null;
+        
         double dirX = playerDx / playerSpeed;
         double dirZ = playerDz / playerSpeed;
         
-        // Perpendicular directions (left/right of player's movement)
         double leftDirX = -dirZ, leftDirZ = dirX;
         double rightDirX = dirZ, rightDirZ = -dirX;
         
-        // Scan 20-30 blocks ahead of the player's movement
         for (int dist = 20; dist <= 30; dist++) {
             int aheadX = (int)Math.round(targetX + dirX * dist);
             int aheadZ = (int)Math.round(targetZ + dirZ * dist);
@@ -249,7 +324,6 @@ public class EndermanStalkGoal {
             boolean wallRight = false;
             Integer leftY = null, rightY = null;
             
-            // Check 2-4 blocks to each side, at heights 1-3
             for (int side = 2; side <= 4; side++) {
                 int lx = aheadX + (int)Math.round(leftDirX * side);
                 int lz = aheadZ + (int)Math.round(leftDirZ * side);
@@ -257,34 +331,42 @@ public class EndermanStalkGoal {
                 int rz = aheadZ + (int)Math.round(rightDirZ * side);
                 
                 for (int h = 1; h <= 3; h++) {
-                    // HYTALE API: Check if blocks are solid at these positions
-                    // if (!wallLeft && world.getBlockAt(lx, aheadY + h, lz).isSolid()) {
-                    //     wallLeft = true; leftY = aheadY + h;
-                    // }
-                    // if (!wallRight && world.getBlockAt(rx, aheadY + h, rz).isSolid()) {
-                    //     wallRight = true; rightY = aheadY + h;
-                    // }
+                    if (!wallLeft && world.getBlockAt(lx, aheadY + h, lz).getType().isSolid()) {
+                        wallLeft = true; leftY = aheadY + h;
+                    }
+                    if (!wallRight && world.getBlockAt(rx, aheadY + h, rz).getType().isSolid()) {
+                        wallRight = true; rightY = aheadY + h;
+                    }
                 }
             }
             
-            // Both sides need walls for a corridor
             if (!wallLeft || !wallRight) return null;
             
-            // Pick wall closest to entity
             double distToLeft = leftY != null 
-                ? distTo(enderman.getX(), enderman.getZ(), lx, lz) 
+                ? distTo(enderman.getX(), enderman.getZ(), 
+                    aheadX + (int)Math.round(leftDirX * 2), aheadZ + (int)Math.round(leftDirZ * 2)) 
                 : Double.MAX_VALUE;
             double distToRight = rightY != null 
-                ? distTo(enderman.getX(), enderman.getZ(), rx, rz) 
+                ? distTo(enderman.getX(), enderman.getZ(),
+                    aheadX + (int)Math.round(rightDirX * 2), aheadZ + (int)Math.round(rightDirZ * 2)) 
                 : Double.MAX_VALUE;
             
             if (distToLeft < distToRight && leftY != null) {
-                return new WallPos((int)targetX + (int)Math.round(leftDirX * 2), leftY, (int)targetZ + (int)Math.round(leftDirZ * 2));
+                return new WallPos((int)targetX + (int)Math.round(leftDirX * 2), 
+                    leftY, (int)targetZ + (int)Math.round(leftDirZ * 2));
             } else if (rightY != null) {
-                return new WallPos((int)targetX + (int)Math.round(rightDirX * 2), rightY, (int)targetZ + (int)Math.round(rightDirZ * 2));
+                return new WallPos((int)targetX + (int)Math.round(rightDirX * 2), 
+                    rightY, (int)targetZ + (int)Math.round(rightDirZ * 2));
             }
         }
         return null;
+    }
+    
+    private void updateEntityVelocity(double vx, double vy, double vz) {
+        if (enderman.getEntity() != null) {
+            enderman.getEntity().setVelocity(
+                new Vector3f((float)vx, (float)vy, (float)vz));
+        }
     }
     
     private double distTo(double x1, double z1, double x2, double z2) {
@@ -300,13 +382,8 @@ public class EndermanStalkGoal {
         CaveNoisePlugin.getLogger().info("Enderman transitioning to chase mode.");
     }
     
-    /**
-     * FOV-based check if the player is looking toward the entity.
-     * Uses ~70 degree field of view (cos(35°) ≈ 0.819).
-     */
     private boolean isPlayerLookingAt(double px, double pz, double lookX, double lookZ) {
         double ex = enderman.getX(), ez = enderman.getZ();
-        
         double dx = ex - px, dz = ez - pz;
         double len = Math.sqrt(dx * dx + dz * dz);
         if (len == 0) return false;

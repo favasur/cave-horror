@@ -22,3 +22,9 @@ hytale-server/
 # Plugin data
 *.log
 config-generated.json
+
+# C# / .NET
+tools/csharp/**/bin/
+tools/csharp/**/obj/
+*.user
+*.suo
