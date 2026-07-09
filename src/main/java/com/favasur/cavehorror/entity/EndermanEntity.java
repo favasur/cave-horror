@@ -55,6 +55,15 @@ public class EndermanEntity {
     private int tickCount = 0;
     private Random random;
     
+    // Wall emergence targets (set by StalkGoal corridor detection)
+    private double targetWallX, targetWallY, targetWallZ;
+    private boolean hasWallTarget = false;
+    
+    // Mold particle spreading after wall emergence
+    private final java.util.List<double[]> moldParticlePositions = new java.util.ArrayList<>();
+    private int moldSpreadTimer = 0;
+    private int moldSpreadIndex = 0;
+    
     public EndermanEntity(CaveNoisePlugin plugin, double x, double y, double z) {
         this.plugin = plugin;
         this.x = x; this.y = y; this.z = z;
@@ -157,6 +166,9 @@ public class EndermanEntity {
         //     entity.getComponent(CollisionComponent.class).setEnabled(true);
         // }
         
+        // Mold particle spreading after wall emergence
+        tickMoldParticles();
+        
         // Auto-despawn after 1 hour
         if (tickCount > 72000) despawn();
     }
@@ -178,10 +190,100 @@ public class EndermanEntity {
         }
     }
     
+    /**
+     * Hunting mode — emerge from a wall with mold particle effects.
+     * Triggered by StalkGoal corridor detection.
+     * Ported from Minecraft EndermanEntity.emergeFromWall().
+     */
     private void tickHunting(double tx, double ty, double tz) {
-        // Ambush mode — emerge from walls (placeholder for wall emergence mechanic)
-        // HYTALE API: Check if player is in a corridor
-        // If so, teleport to wall position and trigger emerge animation
+        if (!hasWallTarget) {
+            // No wall target — return to stalking
+            setState(State.STALKING);
+            stalkGoal.start();
+            return;
+        }
+        
+        // Teleport to the wall position and emerge
+        emergenceFromWall(targetWallX, targetWallY, targetWallZ, tx, tz);
+        
+        hasWallTarget = false;
+        
+        // After emergence, switch to chase mode (player sees us)
+        setInvisible(false);
+        setAggro(true);
+        setState(State.CHASING);
+        
+        // HYTALE API: Play emergence sound
+        // SoundManager.get().playSound("cavehorror:emergence", 
+        //     new Vector3f((float)x, (float)y, (float)z), 1.0f, 0.5f);
+    }
+    
+    /**
+     * Emerge from a wall with mold particle spreading.
+     * Spawns black particles on nearby wall blocks to create a "mold" effect.
+     * Ported from Minecraft EndermanEntity.emergeFromWall().
+     */
+    private void emergenceFromWall(double wallX, double wallY, double wallZ,
+                                     double playerX, double playerZ) {
+        // 1. Teleport to the wall position
+        teleportTo(wallX + 0.5, wallY, wallZ + 0.5);
+        
+        // 2. Face the player
+        double dx = playerX - wallX, dz = playerZ - wallZ;
+        // HYTALE API: setYaw((float)Math.toDegrees(Math.atan2(-dx, dz)));
+        
+        // 3. Determine mold area — find nearby solid blocks for particle placement
+        moldParticlePositions.clear();
+        moldSpreadIndex = 0;
+        int moldHeight = 3;
+        
+        for (int dy = 0; dy < moldHeight; dy++) {
+            int checkY = (int)wallY + dy;
+            
+            // Check block at wall position
+            // HYTALE API: if (world.getBlockAt((int)wallX, checkY, (int)wallZ).isSolid()) {
+            //     moldParticlePositions.add(new double[]{wallX + 0.5, checkY + 0.5, wallZ + 0.5});
+            // }
+            
+            // Check adjacent blocks (same Y) for organic mold coverage
+            int[][] neighbors = {{-1,0},{1,0},{0,-1},{0,1}};
+            for (int[] n : neighbors) {
+                if (random.nextFloat() < 0.4f) {
+                    // HYTALE API: if (world.getBlockAt((int)wallX + n[0], checkY, (int)wallZ + n[1]).isSolid()) {
+                    //     moldParticlePositions.add(new double[]{wallX + 0.5 + n[0], checkY + 0.5, wallZ + 0.5 + n[1]});
+                    // }
+                }
+            }
+        }
+        
+        this.moldSpreadTimer = moldParticlePositions.size() * 2;
+    }
+    
+    /**
+     * Tick mold particle spreading after wall emergence.
+     * Called from tickPhysics() when moldSpreadTimer > 0.
+     */
+    private void tickMoldParticles() {
+        if (moldSpreadTimer <= 0) return;
+        moldSpreadTimer--;
+        
+        if (moldSpreadTimer % 2 == 0 && moldSpreadIndex < moldParticlePositions.size()) {
+            double[] pos = moldParticlePositions.get(moldSpreadIndex++);
+            
+            // HYTALE API: Spawn black dust particles at mold positions
+            // for (int p = 0; p < 4; p++) {
+            //     ParticleAPI.spawn("cavehorror:mold_dust", 
+            //         pos[0] + (random.nextDouble() - 0.5) * 0.8,
+            //         pos[1] + (random.nextDouble() - 0.5) * 0.8,
+            //         pos[2] + (random.nextDouble() - 0.5) * 0.8,
+            //         new Vector3f(0.02f, 0.02f, 0.02f));
+            // }
+        }
+        
+        if (moldSpreadTimer <= 0) {
+            moldParticlePositions.clear();
+            moldSpreadIndex = 0;
+        }
     }
     
     // ---- POSITION HELPERS ----
@@ -212,6 +314,16 @@ public class EndermanEntity {
         // }
         
         return new double[]{spawnX, Math.min(spawnY, 35.0), spawnZ};
+    }
+    
+    /**
+     * Set the wall emergence target position (called by StalkGoal corridor detection).
+     */
+    public void setTargetPosition(double tx, double ty, double tz) {
+        this.targetWallX = tx;
+        this.targetWallY = ty;
+        this.targetWallZ = tz;
+        this.hasWallTarget = true;
     }
     
     public void teleportTo(double tx, double ty, double tz) {
