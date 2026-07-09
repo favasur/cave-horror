@@ -5,10 +5,8 @@ import com.favasur.cavehorror.entity.EndermanRegistry;
 import com.hytale.api.HytaleServer;
 import com.hytale.api.world.Location;
 import com.hytale.api.world.Material;
-import com.hytale.api.world.Vector3f;
 import com.hytale.api.world.World;
 import com.hytale.api.entity.Entity;
-import com.hytale.api.entity.EntityType;
 
 import java.util.Random;
 import java.util.UUID;
@@ -70,7 +68,7 @@ public class EntitySpawnSystem {
         double spawnY = Math.min(py + 5.0, 40.0);
         
         // Get the overworld
-        com.hytale.api.world.World world = HytaleServer.getWorldService().getWorld("overworld");
+        World world = HytaleServer.getWorldService().getWorld("overworld");
         if (world == null) return null;
         
         // Scan downward for solid ground

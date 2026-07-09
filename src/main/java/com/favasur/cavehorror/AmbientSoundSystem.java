@@ -3,7 +3,6 @@ package com.favasur.cavehorror;
 import com.favasur.cavehorror.CaveNoisePlugin.PlayerData;
 import com.favasur.cavehorror.entity.EndermanEntity;
 import com.hytale.api.HytaleServer;
-import com.hytale.api.world.Location;
 import com.hytale.api.world.Vector3f;
 
 import java.util.Random;
