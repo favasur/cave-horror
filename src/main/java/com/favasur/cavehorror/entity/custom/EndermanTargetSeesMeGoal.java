@@ -59,7 +59,7 @@ public class EndermanTargetSeesMeGoal {
      * Raycast from player eyes to entity to check for line-of-sight.
      */
     private boolean checkLineOfSight(double px, double py, double pz) {
-        World world = enderman.getPlugin().getServer().getWorld("overworld");
+        World world = HytaleServer.getWorldService().getWorld("overworld");
         if (world == null) return false;
         
         // Raycast from player eyes (y+1.6) to entity center (y+1.0)

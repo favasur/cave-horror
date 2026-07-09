@@ -42,7 +42,7 @@ public class TorchBurnoutSystem {
         if (playerDepth < 30) return;
         
         int effectiveRadius = extinguishRadius + random.nextInt(extinguishRadius);
-        World world = plugin.getServer().getWorld("overworld");
+        World world = HytaleServer.getWorldService().getWorld("overworld");
         if (world == null) return;
         
         for (int dx = -effectiveRadius; dx <= effectiveRadius; dx++) {

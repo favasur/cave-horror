@@ -224,7 +224,7 @@ public class EndermanStalkGoal {
      * Steal a block (door, glass pane, fence gate, or iron bars) near the player.
      */
     private void stealBlockNearPlayer(double px, double py, double pz) {
-        World world = plugin.getServer().getWorld("overworld");
+        World world = HytaleServer.getWorldService().getWorld("overworld");
         if (world == null) return;
         
         // Scan blocks in 5-block radius of player
@@ -251,7 +251,7 @@ public class EndermanStalkGoal {
      * Build a small structure near the player (sand pillar, pyramid, or mossy dungeon).
      */
     private void buildStructureNearPlayer(double px, double py, double pz) {
-        World world = plugin.getServer().getWorld("overworld");
+        World world = HytaleServer.getWorldService().getWorld("overworld");
         if (world == null) return;
         
         int bx = (int)px + random.nextInt(20) - 10;
@@ -306,7 +306,7 @@ public class EndermanStalkGoal {
                                           double playerDx, double playerDz, double playerSpeed) {
         if (playerSpeed < 0.01) return null;
         
-        World world = plugin.getServer().getWorld("overworld");
+        World world = HytaleServer.getWorldService().getWorld("overworld");
         if (world == null) return null;
         
         double dirX = playerDx / playerSpeed;

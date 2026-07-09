@@ -1,37 +1,25 @@
 package com.favasur.cavehorror;
 
 import com.favasur.cavehorror.entity.EndermanEntity;
-import com.favasur.cavehorror.entity.EndermanEntity.State;
 import com.favasur.cavehorror.entity.EndermanRegistry;
 import com.favasur.cavehorror.entity.custom.*;
 import com.favasur.cavehorror.torch.PluginConfig;
 import com.favasur.cavehorror.torch.TorchBurnoutSystem;
 import com.hytale.api.plugin.JavaPlugin;
-import com.hytale.api.events.EventHandler;
 import com.hytale.api.events.EventPriority;
 import com.hytale.api.events.Subscribe;
 import com.hytale.api.events.player.PlayerJoinEvent;
-import com.hytale.api.events.player.PlayerMoveEvent;
 import com.hytale.api.events.player.PlayerQuitEvent;
 import com.hytale.api.events.server.ServerTickEvent;
-import com.hytale.api.events.entity.EntityDamageEvent;
 import com.hytale.api.events.entity.EntityDamageByEntityEvent;
 import com.hytale.api.world.Location;
-import com.hytale.api.world.Vector3f;
-import com.hytale.api.world.Block;
-import com.hytale.api.world.Material;
-import com.hytale.api.entity.Entity;
 import com.hytale.api.entity.EntityType;
 import com.hytale.api.player.Player;
 import com.hytale.api.HytaleServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -48,7 +36,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * - HytaleServer.getEntityService().spawn(entityType, location)
  * - HytaleServer.getEntityRegistry().register(entityDefinition)
  * - @Subscribe annotation for event handlers
- * - HytaleServer.getScheduler() for timed tasks
  */
 public class CaveNoisePlugin extends JavaPlugin {
 
@@ -63,6 +50,9 @@ public class CaveNoisePlugin extends JavaPlugin {
     private TorchBurnoutSystem torchSystem;
     private EndermanRegistry endermanRegistry;
     private PluginConfig pluginConfig;
+    
+    // Track native entity UUIDs for event handling
+    private final Set<UUID> trackedEntityIds = ConcurrentHashMap.newKeySet();
     
     // Stalker proximity tracking
     private final ConcurrentHashMap<UUID, Boolean> playerHasStalker = new ConcurrentHashMap<>();
@@ -105,8 +95,12 @@ public class CaveNoisePlugin extends JavaPlugin {
         // Register event listeners
         HytaleServer.getEventBus().register(this);
         
-        // Register custom entity type with the entity registry
-        HytaleServer.getEntityRegistry().register(new EndermanEntity.EndermanEntityDefinition(this));
+        // Register custom entity type and capture the EntityType
+        EndermanEntity.EndermanEntityDefinition def = new EndermanEntity.EndermanEntityDefinition(this);
+        EntityType registeredType = HytaleServer.getEntityRegistry().register(def);
+        if (registeredType != null) {
+            EndermanEntity.CAVE_DWELLER_TYPE = registeredType;
+        }
         
         resetCalmTimer();
         resetNoiseTimer();
@@ -119,18 +113,14 @@ public class CaveNoisePlugin extends JavaPlugin {
     public void onDisable() {
         LOGGER.info("Cave Horror: White Eyes shutting down...");
         endermanRegistry.despawnAll();
+        trackedEntityIds.clear();
         LOGGER.info("Cave Horror: White Eyes shut down.");
     }
     
     // ---- EVENT HANDLERS ----
     
-    /**
-     * Server tick event — drives all game logic every tick (20 times/sec).
-     * Replaces the old ScheduledExecutorService approach.
-     */
     @Subscribe
     public void onServerTick(ServerTickEvent event) {
-        // Collect player data from the API
         cachedPlayers.clear();
         Collection<Player> onlinePlayers = HytaleServer.getPlayerService().getOnlinePlayers();
         
@@ -163,7 +153,6 @@ public class CaveNoisePlugin extends JavaPlugin {
     @Subscribe
     public void onPlayerQuit(PlayerQuitEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
-        // Despawn any entities targeting this player
         for (EndermanEntity enderman : endermanRegistry.getActiveEntities()) {
             if (uuid.toString().equals(enderman.getTargetPlayerId())) {
                 enderman.despawn();
@@ -173,8 +162,9 @@ public class CaveNoisePlugin extends JavaPlugin {
     
     @Subscribe(priority = EventPriority.HIGH)
     public void onEntityDamage(EntityDamageByEntityEvent event) {
-        // Prevent enderman from taking damage from non-player sources (keeps it scary)
-        if (event.getEntity() instanceof EndermanEntity) {
+        // Check if damaged entity is our tracked enderman by UUID
+        if (trackedEntityIds.contains(event.getEntity().getUniqueId())) {
+            // Only allow players to damage the enderman
             if (!(event.getDamager() instanceof Player)) {
                 event.setCancelled(true);
             }
@@ -183,10 +173,6 @@ public class CaveNoisePlugin extends JavaPlugin {
     
     // ---- MAIN TICK ----
     
-    /**
-     * Main server tick logic — ambient sounds, spawning, entity AI dispatch.
-     * Called once per ServerTickEvent (20 times/sec).
-     */
     private void serverTick(List<PlayerData> players) {
         if (players.isEmpty()) return;
         
@@ -209,10 +195,9 @@ public class CaveNoisePlugin extends JavaPlugin {
         boolean anyPlayerHasStalker = playerHasStalker.values().stream().anyMatch(b -> b);
         if (anyPlayerHasStalker) resetCalmTimer();
         
-        // Decrement timers
         noiseTimer--; vanillaNoiseTimer--; stalkNoiseTimer--; calmTimer--;
         
-        // === AMBIENT SOUNDS (only for players with nearby stalker) ===
+        // === AMBIENT SOUNDS ===
         for (PlayerData player : players) {
             if (!playerHasStalker.getOrDefault(player.uuid, false)) continue;
             boolean underground = player.y < 40 && !player.canSeeSky;
@@ -251,6 +236,10 @@ public class CaveNoisePlugin extends JavaPlugin {
                     victim.lookYaw, victim.lookPitch);
                 if (entity != null) {
                     entity.initAI();
+                    // Track the native entity UUID for event handling
+                    if (entity.getEntity() != null) {
+                        trackedEntityIds.add(entity.getEntity().getUniqueId());
+                    }
                 }
                 resetCalmTimer();
             }
@@ -270,7 +259,6 @@ public class CaveNoisePlugin extends JavaPlugin {
             }
             if (target == null) continue;
             
-            // Run targeting goals to detect state transitions
             double[] lookVector = yawPitchToLookVector(target.lookYaw, target.lookPitch);
             boolean seeMe = enderman.getTargetSeesMeGoal().canUse(
                 target.x, target.y, target.z, lookVector[0], lookVector[1], lookVector[2], target.spectator);
@@ -283,21 +271,17 @@ public class CaveNoisePlugin extends JavaPlugin {
                 enderman.getTargetTooCloseGoal().start(target.uuid.toString());
             }
             
-            // Compute if player is looking at the entity (shared FOV check)
             boolean playerLooking = isPlayerLookingAtEntity(target, enderman);
             
-            // Dispatch to the active state's goal
             enderman.tickAI(target.x, target.y, target.z,
                            lookVector[0], lookVector[1], lookVector[2],
                            target.spectator, playerLooking);
         }
         
-        // Physics tick for all entities
         for (EndermanEntity enderman : endermanRegistry.getActiveEntities()) {
             enderman.tickPhysics();
         }
         
-        // Torch burnout tick
         for (PlayerData player : players) {
             if (!playerHasStalker.getOrDefault(player.uuid, false)) continue;
             int depth = (int)(player.world.getHighestBlockYAt((int)player.x, (int)player.z) - player.y);
@@ -309,17 +293,13 @@ public class CaveNoisePlugin extends JavaPlugin {
         endermanRegistry.cleanDead();
     }
     
-    /**
-     * FOV-based check if a player is looking at an entity (~70° cone).
-     */
     private boolean isPlayerLookingAtEntity(PlayerData player, EndermanEntity enderman) {
         double ex = enderman.getX(), ez = enderman.getZ();
         double dx = ex - player.x, dz = ez - player.z;
         double len = Math.sqrt(dx * dx + dz * dz);
         if (len == 0) return false;
         dx /= len; dz /= len;
-        
-        return dx * player.lookX + dz * player.lookZ > 0.819; // cos(35°)
+        return dx * player.lookX + dz * player.lookZ > 0.819;
     }
     
     // ---- TIMERS ----
@@ -344,9 +324,6 @@ public class CaveNoisePlugin extends JavaPlugin {
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
     
-    /**
-     * Convert yaw/pitch to a normalized look direction vector (x, y, z).
-     */
     private double[] yawPitchToLookVector(float yaw, float pitch) {
         double yawRad = Math.toRadians(yaw);
         double pitchRad = Math.toRadians(pitch);
@@ -366,10 +343,8 @@ public class CaveNoisePlugin extends JavaPlugin {
     public PluginConfig getPluginConfig() { return pluginConfig; }
     public Random getRandom() { return random; }
     public static Logger getLogger() { return LOGGER; }
+    public Set<UUID> getTrackedEntityIds() { return trackedEntityIds; }
     
-    /**
-     * Lightweight player state snapshot for one tick.
-     */
     public static class PlayerData {
         public final UUID uuid;
         public final double x, y, z;

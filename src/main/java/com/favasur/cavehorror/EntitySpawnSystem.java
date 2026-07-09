@@ -70,7 +70,7 @@ public class EntitySpawnSystem {
         double spawnY = Math.min(py + 5.0, 40.0);
         
         // Get the overworld
-        World world = plugin.getServer().getWorld("overworld");
+        com.hytale.api.world.World world = HytaleServer.getWorldService().getWorld("overworld");
         if (world == null) return null;
         
         // Scan downward for solid ground

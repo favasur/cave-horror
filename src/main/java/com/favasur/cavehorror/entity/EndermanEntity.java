@@ -229,7 +229,7 @@ public class EndermanEntity {
         moldParticlePositions.clear();
         moldSpreadIndex = 0;
         int moldHeight = 3;
-        World world = plugin.getServer().getWorld("overworld");
+        World world = HytaleServer.getWorldService().getWorld("overworld");
         if (world == null) return;
         
         for (int dy = 0; dy < moldHeight; dy++) {
@@ -344,6 +344,8 @@ public class EndermanEntity {
     public void despawn() {
         this.alive = false;
         if (entity != null) {
+            // Remove from tracked UUID set for event handling
+            plugin.getTrackedEntityIds().remove(entity.getUniqueId());
             entity.remove();
         }
         plugin.getEndermanRegistry().untrack(this);

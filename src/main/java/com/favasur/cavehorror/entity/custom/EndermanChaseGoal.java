@@ -122,7 +122,7 @@ public class EndermanChaseGoal {
      * Destroy torches within 1-block radius of the entity.
      */
     private void destroyNearbyTorches() {
-        World world = enderman.getPlugin().getServer().getWorld("overworld");
+        World world = HytaleServer.getWorldService().getWorld("overworld");
         if (world == null) return;
         
         int bx = (int)enderman.getX();

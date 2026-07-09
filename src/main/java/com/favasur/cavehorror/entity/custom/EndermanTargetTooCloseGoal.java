@@ -55,7 +55,7 @@ public class EndermanTargetTooCloseGoal {
      * Raycast from player to entity to verify line-of-sight.
      */
     private boolean checkLineOfSight(double px, double py, double pz) {
-        World world = enderman.getPlugin().getServer().getWorld("overworld");
+        World world = HytaleServer.getWorldService().getWorld("overworld");
         if (world == null) return false;
         
         RayTraceResult result = world.rayTrace(

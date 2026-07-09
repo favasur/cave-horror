@@ -113,8 +113,9 @@ public class AmbientSoundSystem {
     
     private void revealNearbyEyes(PlayerData player) {
         // Only reveal eyes in complete darkness
-        int brightness = player.world.getMaxLocalBrightness(
-            (int)player.x, (int)player.y, (int)player.z);
+        // Uses WorldService.getBrightness() to check ambient light level
+        int brightness = HytaleServer.getWorldService().getBrightness(
+            player.world, (int)player.x, (int)player.y, (int)player.z);
         if (brightness > 0) return;
         
         for (EndermanEntity entity : plugin.getEndermanRegistry().getActiveEntities()) {
