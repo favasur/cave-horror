@@ -1,0 +1,33 @@
+{
+  "cavehorror:enderman_scream": {
+    "category": "hostile",
+    "sounds": [
+      "cavehorror:audio/SinkholeFall"
+    ]
+  },
+  "cavehorror:enderman_ambient": {
+    "category": "hostile",
+    "sounds": [
+      "cavehorror:audio/Breathing",
+      "cavehorror:audio/Corrosion1",
+      "cavehorror:audio/Corrosion2",
+      "cavehorror:audio/Corrosion3"
+    ]
+  },
+  "cavehorror:enderman_stare": {
+    "category": "hostile",
+    "sounds": [
+      "cavehorror:audio/Laugh",
+      "cavehorror:audio/Damage2"
+    ]
+  },
+  "cavehorror:cave_ambient": {
+    "category": "ambient",
+    "sounds": [
+      "cavehorror:audio/Decay0",
+      "cavehorror:audio/Decay1",
+      "cavehorror:audio/Decay2",
+      "cavehorror:audio/Decay3"
+    ]
+  }
+}

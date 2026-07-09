@@ -1,0 +1,29 @@
+{
+  "plugin.cavehorror.name": "Cave Horror: White Eyes",
+  "plugin.cavehorror.description": "A cave-dwelling horror experience — something watches from the darkness.",
+  
+  "entity.cavehorror.cave_dweller": "Cave Dweller",
+  
+  "item.cavehorror.lit_torch": "Lit Torch",
+  "item.cavehorror.lit_soul_torch": "Lit Soul Torch",
+  "item.cavehorror.enderman_spawn_egg": "Cave Dweller Spawn Egg",
+  
+  "block.cavehorror.lit_torch": "Lit Torch",
+  "block.cavehorror.lit_soul_torch": "Lit Soul Torch",
+  
+  "command.cavehorror.spawn.success": "Spawned Cave Dweller behind you.",
+  "command.cavehorror.spawn.fail": "No valid spawn position found.",
+  "command.cavehorror.debug.state": "Entity state: %s | Invisible: %s | Aggro: %s",
+  "command.cavehorror.debug.none": "No active entities.",
+  
+  "death.attack.cave_dweller": "%1$s was claimed by the darkness",
+  "death.attack.cave_dweller.player": "%1$s was claimed by the darkness while fighting %2$s",
+  
+  "subtitles.cavehorror.enderman_scream": "Distant scream",
+  "subtitles.cavehorror.enderman_ambient": "Eerie whisper",
+  "subtitles.cavehorror.enderman_stare": "Something stares back",
+  "subtitles.cavehorror.cave_ambient": "Cave echoes",
+  "subtitles.cavehorror.emergence": "Entity emerges from wall",
+  "subtitles.cavehorror.torch_snuff": "Torch extinguishes",
+  "subtitles.cavehorror.record_13": "Playing: §3???§r"
+}

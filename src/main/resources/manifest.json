@@ -1,0 +1,9 @@
+{
+  "id": "cave-horror-white-eyes",
+  "name": "${plugin_name}",
+  "version": "${plugin_version}",
+  "main": "com.favasur.cavehorror.CaveNoisePlugin",
+  "author": "Gargin",
+  "description": "${plugin_description}",
+  "dependencies": []
+}
