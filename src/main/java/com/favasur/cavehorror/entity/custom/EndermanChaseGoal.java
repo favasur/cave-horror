@@ -3,7 +3,6 @@ package com.favasur.cavehorror.entity.custom;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
@@ -46,8 +45,6 @@ public class EndermanChaseGoal extends Goal {
     private Vec3 vecMobPos;
     private final int ticksToSqueeze;
     private int currentTicksToSqueeze;
-    private final int ticksTillLeave;
-    private int currentTicksTillLeave;
     Vec3 xPathStartVec;
     Vec3 zPathStartVec;
     Vec3 xPathTargetVec;
@@ -75,8 +72,6 @@ public class EndermanChaseGoal extends Goal {
         this.vecNodePos = null;
         this.ticksToSqueeze = 15;
         this.nodePos = null;
-        this.ticksTillLeave = 600;
-        this.currentTicksTillLeave = this.ticksTillLeave;
     }
 
     @Override
@@ -125,7 +120,7 @@ public class EndermanChaseGoal extends Goal {
         } else if (!this.followingTargetEvenIfNotSeen) {
             return !this.mob.getNavigation().isDone();
         } else {
-            return !(livingentity instanceof Player p) || (!p.isCreative() && !p.isSpectator());
+            return !(livingentity instanceof Player p) || !p.isSpectator();
         }
     }
 
@@ -138,7 +133,7 @@ public class EndermanChaseGoal extends Goal {
     @Override
     public void stop() {
         LivingEntity livingentity = this.mob.getTarget();
-        if (!EntitySelector.NO_CREATIVE_OR_SPECTATOR.test(livingentity)) {
+        if (livingentity != null && livingentity.isSpectator()) {
             this.mob.setTarget(null);
         }
         this.enderman.squeezeCrawling = false;
@@ -401,11 +396,6 @@ public class EndermanChaseGoal extends Goal {
             } else {
                 this.aggroTick();
             }
-        }
-
-        this.currentTicksTillLeave--;
-        if (this.currentTicksTillLeave <= 0 && (!this.isPlayerLookingTowards() || !this.inPlayerLineOfSight())) {
-            this.enderman.discard();
         }
 
         this.currentBlock = new BlockPos(

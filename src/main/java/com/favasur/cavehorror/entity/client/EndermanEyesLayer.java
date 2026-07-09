@@ -22,6 +22,9 @@ public class EndermanEyesLayer extends GeoRenderLayer<EndermanEntity> {
     @Override
     public void render(PoseStack poseStack, EndermanEntity animatable, BakedGeoModel bakedModel, RenderType renderType,
                        MultiBufferSource bufferSource, VertexConsumer buffer, float partialTick, int packedLight, int packedOverlay) {
+        // Eyes stay invisible until a cave ambient sound plays or player is deep enough
+        if (!animatable.areEyesVisible()) return;
+
         packedLight = 15728880;
         RenderType eyesRenderType = RenderType.entityCutoutNoCull(TEXTURE);
         this.getRenderer().reRender(this.getDefaultBakedModel(animatable), poseStack, bufferSource, animatable,

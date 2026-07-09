@@ -1,0 +1,47 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "bonus_rolls": 0,
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "cavehorror:lit_soul_torch",
+          "conditions": [
+            {
+              "condition": "minecraft:block_state_property",
+              "block": "cavehorror:lit_soul_torch",
+              "properties": {
+                "lit": "true"
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:stick",
+          "conditions": [
+            {
+              "condition": "minecraft:block_state_property",
+              "block": "cavehorror:lit_soul_torch",
+              "properties": {
+                "lit": "false"
+              }
+            },
+            {
+              "condition": "minecraft:random_chance",
+              "chance": 0.00
+            }
+          ]
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/torch"
+}

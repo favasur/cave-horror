@@ -1,0 +1,64 @@
+{
+  "variants": {
+    "facing=east,lit=true,face=wall": {
+      "model": "minecraft:block/wall_torch"
+    },
+    "facing=north,lit=true,face=wall": {
+      "model": "minecraft:block/wall_torch",
+      "y": 270
+    },
+    "facing=south,lit=true,face=wall": {
+      "model": "minecraft:block/wall_torch",
+      "y": 90
+    },
+    "facing=west,lit=true,face=wall": {
+      "model": "minecraft:block/wall_torch",
+      "y": 180
+    },
+    "facing=east,lit=false,face=wall": {
+      "model": "cavehorror:block/wall_unlit_torch"
+    },
+    "facing=north,lit=false,face=wall": {
+      "model": "cavehorror:block/wall_unlit_torch",
+      "y": 270
+    },
+    "facing=south,lit=false,face=wall": {
+      "model": "cavehorror:block/wall_unlit_torch",
+      "y": 90
+    },
+    "facing=west,lit=false,face=wall": {
+      "model": "cavehorror:block/wall_unlit_torch",
+      "y": 180
+    },
+    "facing=east,lit=true,face=floor": {
+      "model": "minecraft:block/torch"
+    },
+    "facing=north,lit=true,face=floor": {
+      "model": "minecraft:block/torch",
+      "y": 270
+    },
+    "facing=south,lit=true,face=floor": {
+      "model": "minecraft:block/torch",
+      "y": 90
+    },
+    "facing=west,lit=true,face=floor": {
+      "model": "minecraft:block/torch",
+      "y": 180
+    },
+    "facing=east,lit=false,face=floor": {
+      "model": "cavehorror:block/unlit_torch"
+    },
+    "facing=north,lit=false,face=floor": {
+      "model": "cavehorror:block/unlit_torch",
+      "y": 270
+    },
+    "facing=south,lit=false,face=floor": {
+      "model": "cavehorror:block/unlit_torch",
+      "y": 90
+    },
+    "facing=west,lit=false,face=floor": {
+      "model": "cavehorror:block/unlit_torch",
+      "y": 180
+    }
+  }
+}

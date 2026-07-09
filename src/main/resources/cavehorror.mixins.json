@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "com.favasur.cavehorror.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "LightTextureMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
