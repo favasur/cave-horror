@@ -167,7 +167,9 @@ public class EndermanEntity {
         // }
         
         // Mold particle spreading after wall emergence
-        tickMoldParticles();
+        if (moldSpreadTimer > 0) {
+            tickMoldParticles();
+        }
         
         // Auto-despawn after 1 hour
         if (tickCount > 72000) despawn();
